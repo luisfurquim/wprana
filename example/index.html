@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+   <meta charset="UTF-8">
+   <title>wprana WASM example</title>
+
+   <!-- 1. Helper JS: define window._pranaDef (deve vir antes do WASM) -->
+   <script src="../prana_helper.js"></script>
+
+   <!-- 2. Runtime Go WASM (copie de $(go env GOROOT)/misc/wasm/wasm_exec.js) -->
+   <script src="wasm_exec.js"></script>
+
+   <!-- 3. Carrega o binário WASM -->
+   <script>
+      const go = new Go();
+      WebAssembly
+         .instantiateStreaming(fetch("main.wasm"), go.importObject)
+         .then(result => go.run(result.instance))
+         .catch(err => console.error("Erro ao carregar WASM:", err));
+   </script>
+</head>
+<body>
+   <h1>wprana Go/WASM</h1>
+
+   <!-- Custom element registrado pelo módulo mywidget -->
+   <my-widget title="Demonstração"></my-widget>
+
+</body>
+</html>

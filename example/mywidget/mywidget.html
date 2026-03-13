@@ -1,0 +1,11 @@
+<div class="widget">
+   <h2>{{title}}</h2>
+   <p>Contador: <span>{{count}}</span></p>
+   <ul>
+      <li *items:i>{{items[i].label}}</li>
+   </ul>
+   <div ?showExtra>
+      <p>Extra: {{extra}}</p>
+   </div>
+   <input &value="{{inputVal}}" type="text" placeholder="Digite algo..." />
+</div>
