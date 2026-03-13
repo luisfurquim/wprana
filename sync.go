@@ -1,0 +1,366 @@
+//go:build js && wasm
+
+package wprana
+
+import (
+	"syscall/js"
+)
+
+// ── Construção de contexto empilhado ──────────────────────────────────────────
+
+// buildCtx constrói um novo Ctx adicionando o índice de loop e o item corrente
+// na frente do ctx principal. Equivale ao stack() do JS original.
+//
+//   ndxMap   - {"i": loopIndex} para resolução de {{i}}
+//   itemCtx  - [item] contexto do item corrente (pode ser nil)
+//   mainCtx  - contexto principal herdado
+func buildCtx(ndxMap map[string]any, itemCtx []any, mainCtx Ctx) Ctx {
+	var stk Ctx
+
+	// O ndxMap só entra na pilha se não for um contexto vazio com chave undefined
+	if ndxMap != nil {
+		stk = append(stk, ndxMap)
+	}
+
+	for _, v := range itemCtx {
+		if v != nil {
+			stk = append(stk, v)
+		}
+	}
+
+	stk = append(stk, mainCtx...)
+	return stk
+}
+
+// ── Sincronização de atributos de um elemento ─────────────────────────────────
+
+// syncElement aplica os bindings de atributos de ref ao nó dom.
+// Também percorre os filhos recursivamente.
+// Equivale ao syncElement() do JS original.
+func syncElement(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown bool) {
+	if dom.IsNull() || dom.IsUndefined() {
+		return
+	}
+
+	// ── Atributos ──────────────────────────────────────────────────────────
+	for attrName, ab := range ref.Attrs {
+		val := solveAll(ab.Segs, ctx)
+		dom.Call("setAttribute", attrName, val)
+
+		// Para input/select/textarea com atributo value: seta .value também
+		if attrName == "value" && isFormInput(dom) {
+			dom.Set("value", val)
+		}
+
+		// Two-way binding: atualiza o ctxPtr para que o handler use o ctx atual
+		if ab.PureRef != nil {
+			nodeID, hasID := getNodeID(dom)
+			if hasID {
+				if st, found := nodeRegistry[nodeID]; found && st.TwoWay != nil {
+					if twb, ok := st.TwoWay[attrName]; ok {
+						*twb.CtxPtr = ctx
+					}
+				}
+			}
+		}
+
+		// ForceSync descendente: propaga para o root do shadow DOM
+		if syncDown && ab.ForceSync {
+			root := dom.Get("root")
+			if !root.IsUndefined() && !root.IsNull() {
+				prana := root.Get("prana")
+				if !prana.IsUndefined() && !prana.IsNull() {
+					// Sinaliza que forceSync está ativo - tratado pelo prana.go
+					root.Set("_pranaForceSync", true)
+				}
+			}
+		}
+	}
+
+	// ── Filhos ────────────────────────────────────────────────────────────
+	childNodes := dom.Get("childNodes")
+	for idx, childRef := range ref.Children {
+		child := childNodes.Index(idx)
+		if child.IsUndefined() || child.IsNull() {
+			G.Printf(4, "syncElement: filho %d não encontrado\n", idx)
+			continue
+		}
+		doSync(child, childRef, ctx, state, syncDown, nil)
+		// Propaga maySync para raízes de shadow DOM filhos
+		childRoot := child.Get("root")
+		if !childRoot.IsUndefined() && !childRoot.IsNull() {
+			pr := childRoot.Get("prana")
+			if !pr.IsUndefined() && !pr.IsNull() {
+				childRoot.Set("_pranaMaySync", true)
+			}
+		}
+	}
+}
+
+// ── Sincronização condicional ─────────────────────────────────────────────────
+
+// condSync avalia a condição e mostra/esconde o elemento.
+// Equivale ao condSync() do JS original.
+func condSync(dom js.Value, ref *DOMRefNode, ctx Ctx, index any, state *PranaState, syncDown bool) js.Value {
+	var tree []RefNode
+
+	nt := nodeType(dom)
+	if nt == jsNodeComment {
+		// Estava escondido: tree vem do modelo guardado no estado
+		st := getState(dom)
+		if st == nil || st.CondModel.IsUndefined() {
+			G.Printf(1, "condSync: comentário sem CondModel no registry\n")
+			return dom
+		}
+		tree = ref.CondTree
+	} else {
+		tree = ref.CondTree
+	}
+
+	// Resolve condição
+	var res any
+	for i := range ctx {
+		res = solve(tree, ctx[i])
+		if res != nil {
+			break
+		}
+	}
+
+	// Suporta condições que retornam funções (func(index) bool)
+	if fn, ok := res.(func(any) bool); ok {
+		res = fn(index)
+	}
+
+	// Avalia truthiness (equivale ao truthy do JS)
+	cond := isTruthy(res)
+
+	if cond {
+		// Deve estar visível
+		if nt == jsNodeComment {
+			// Restaura o elemento original
+			st := getState(dom)
+			model := st.CondModel
+			parent := dom.Get("parentNode")
+			if parent.IsNull() || parent.IsUndefined() {
+				parent = st.CondDaddy
+			}
+			parent.Call("replaceChild", model, dom)
+			dom = model
+			syncElement(dom, ref, ctx, state, syncDown)
+		} else {
+			syncElement(dom, ref, ctx, state, syncDown)
+		}
+	} else {
+		// Deve estar oculto
+		if nt == jsNodeElement {
+			comment := domCreateComment("if false")
+			_, cst := getOrCreateState(comment)
+			cst.CondModel = dom
+			cst.CondDaddy = dom.Get("parentNode")
+
+			parent := dom.Get("parentNode")
+			if !parent.IsNull() && !parent.IsUndefined() {
+				parent.Call("replaceChild", comment, dom)
+			} else {
+				// Tenta via daddy (caso de nó que saiu do DOM normalmente)
+				daddy := cst.CondDaddy
+				if !daddy.IsNull() && !daddy.IsUndefined() {
+					// busca o nó filho correto e substitui
+					replaceInDaddy(daddy, dom, comment)
+				}
+			}
+			dom = comment
+		}
+	}
+
+	return dom
+}
+
+// replaceInDaddy tenta substituir old por newNode em algum nível de daddy.
+func replaceInDaddy(daddy, old, newNode js.Value) {
+	// Tentativa direta
+	children := daddy.Get("childNodes")
+	n := children.Get("length").Int()
+	for i := 0; i < n; i++ {
+		c := children.Index(i)
+		if c.Equal(old) {
+			daddy.Call("replaceChild", newNode, old)
+			return
+		}
+		// Busca um nível abaixo
+		grandkids := c.Get("childNodes")
+		gn := grandkids.Get("length").Int()
+		for j := 0; j < gn; j++ {
+			if grandkids.Index(j).Equal(old) {
+				c.Call("replaceChild", newNode, old)
+				return
+			}
+		}
+	}
+}
+
+// ── Sincronização principal ───────────────────────────────────────────────────
+
+// doSync sincroniza dom com os bindings de ref no contexto ctx.
+// Equivale ao sync() do JS original.
+func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown bool, change *Change) {
+	if ref == nil || dom.IsNull() || dom.IsUndefined() {
+		return
+	}
+
+	// ── Nó de texto ───────────────────────────────────────────────────────
+	if ref.Type == TokTxt {
+		val := solveAll(ref.TextSegs, ctx)
+		// textarea: atualiza .value, outros: atualiza .data
+		parent := dom.Get("parentNode")
+		if !parent.IsNull() && !parent.IsUndefined() && tagName(parent) == "textarea" {
+			parent.Set("value", val)
+		} else {
+			dom.Set("data", val)
+		}
+		return
+	}
+
+	// ── Iteração de array ─────────────────────────────────────────────────
+	if ref.ArrayVar != "" {
+		st := getState(dom)
+		if st == nil {
+			G.Printf(1, "doSync: nó de array sem estado: %q\n", ref.ArrayVar)
+			return
+		}
+
+		// Resolve o array no contexto
+		var arr []any
+		for j := range ctx {
+			v := solve(st.Tree, ctx[j])
+			if v != nil {
+				if a, ok := v.([]any); ok {
+					arr = arr[:0]
+					arr = a
+					break
+				}
+				G.Printf(3, "doSync: arrayVar %q não é []any: %T\n", ref.ArrayVar, v)
+				return
+			}
+		}
+		if arr == nil {
+			G.Printf(2, "doSync: símbolo não resolvido para iteração: %q\n", ref.ArrayVar)
+			return
+		}
+
+		// Determina índice de deleção (change otimizado)
+		kdel := -1
+		if change != nil && change.Delete != nil {
+			if &change.Delete.Target[0] == &arr[0] {
+				kdel = change.Delete.Index
+			}
+		}
+
+		// Sincroniza filhos existentes com itens do array
+		childNodes := dom.Get("childNodes")
+		i := 0
+		for i < len(arr) {
+			child := childNodes.Index(i)
+			if child.IsUndefined() || child.IsNull() {
+				break
+			}
+			if kdel == i {
+				dom.Call("removeChild", child)
+				// Não avança i: o próximo filho agora está no índice i
+				arr = append(arr[:kdel], arr[kdel+1:]...)
+				kdel = -1
+				continue
+			}
+			ndx := map[string]any{st.AIndex: i}
+			itemCtx := []any{arr[i]}
+			itemCtxFull := buildCtx(ndx, itemCtx, ctx)
+
+			if ref.Cond != "" {
+				condSync(child, ref, itemCtxFull, i, state, syncDown)
+			} else {
+				syncElement(child, ref, itemCtxFull, state, syncDown)
+			}
+			i++
+		}
+
+		// Adiciona novos filhos para itens além dos existentes
+		for ; i < len(arr); i++ {
+			ndx := map[string]any{st.AIndex: i}
+			itemCtx := []any{arr[i]}
+			itemCtxFull := buildCtx(ndx, itemCtx, ctx)
+
+			// Sincroniza o modelo antes de clonar
+			model := st.Model
+			if ref.Cond != "" {
+				condSync(model, ref, itemCtxFull, i, state, syncDown)
+			} else {
+				syncElement(model, ref, itemCtxFull, state, syncDown)
+			}
+
+			cloned := cloneNode(model)
+			// Transfere metadados do estado para o clone
+			clonedSt := getState(cloned)
+			if clonedSt == nil {
+				_, clonedSt = getOrCreateState(cloned)
+			}
+			clonedSt.Model = st.Model
+			clonedSt.ACtrl = st.ACtrl
+			clonedSt.AIndex = st.AIndex
+			clonedSt.Tree = st.Tree
+			if st.State != nil {
+				clonedSt.State = st.State
+			}
+			if st.PRoot.Truthy() {
+				clonedSt.PRoot = st.PRoot
+			}
+
+			dom.Call("appendChild", cloned)
+		}
+
+		// Remove filhos excedentes
+		for {
+			childNodes = dom.Get("childNodes")
+			nChildren := childNodes.Get("length").Int()
+			if i >= nChildren {
+				break
+			}
+			dom.Call("removeChild", childNodes.Index(i))
+		}
+
+		return
+	}
+
+	// ── Condicional ───────────────────────────────────────────────────────
+	if ref.Cond != "" {
+		condSync(dom, ref, ctx, nil, state, syncDown)
+		return
+	}
+
+	// ── Elemento simples ──────────────────────────────────────────────────
+	syncElement(dom, ref, ctx, state, syncDown)
+}
+
+// isTruthy replica a truthiness do JavaScript.
+func isTruthy(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch x := v.(type) {
+	case bool:
+		return x
+	case int:
+		return x != 0
+	case int64:
+		return x != 0
+	case float64:
+		return x != 0
+	case string:
+		return x != ""
+	case []any:
+		return len(x) > 0
+	case map[string]any:
+		return len(x) > 0
+	default:
+		return true
+	}
+}
