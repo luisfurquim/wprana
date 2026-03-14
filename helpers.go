@@ -123,3 +123,51 @@ func SetInterval(fn func(), interval int) (cancel func()) {
 		f.Release()
 	}
 }
+
+// Sleep bloqueia a goroutine atual por ms milissegundos, cedendo o controle
+// ao event loop JavaScript enquanto aguarda.
+func Sleep(ms int) {
+	done := make(chan struct{})
+	jsGlobal.Call("setTimeout", JSFuncOnce(func() {
+		close(done)
+	}), ms)
+	<-done
+}
+
+type Ticker struct{
+	id js.Value
+	fn js.Func
+	Tick chan struct{}
+}
+
+
+// NewTicker retorna um channel que recebe um struct{}{} a cada ms milissegundos
+// e uma função stop() para interromper o ticker e liberar recursos.
+func NewTicker(ms int) *Ticker {
+	var tk Ticker
+
+	tk.Tick = make(chan struct{}, 1)
+
+	tk.fn = js.FuncOf(func(this js.Value, args []js.Value) any {
+		select {
+		case tk.Tick <- struct{}{}:
+		default:
+		}
+		return nil
+	})
+
+	tk.id = jsGlobal.Call(
+		"setInterval",
+		tk.fn,
+		ms,
+	)
+	return &tk
+}
+
+func (tk *Ticker) Stop() {
+	jsGlobal.Call("clearInterval", tk.id)
+	tk.fn.Release()
+	close(tk.Tick)
+}
+
+
