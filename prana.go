@@ -202,13 +202,14 @@ func elementAttrChanged(self js.Value, name, oldVal, newVal string) {
 		}
 	}
 
-	// Propaga para o mapa de dados e dispara sync
+	// Propaga para o mapa de dados e dispara sync (somente local, sem syncUp,
+	// pois attribute changes são downstream: pai→filho).
 	st := getState(self)
 	if st == nil || st.State == nil {
 		return
 	}
-	st.State.Data.M[name] = newVal
-	st.State.sync(nil)
+	st.State.Data.M[name] = coerceToType(newVal, st.State.Data.M[name])
+	st.State.syncLocal(nil)
 }
 
 // elementDisconnected é chamado quando o elemento é removido do DOM.
