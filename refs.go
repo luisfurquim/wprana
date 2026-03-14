@@ -132,6 +132,16 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 			ab.PureRef = segs[0].Ref
 		}
 
+		// Armazena mapeamento de forceSync no elemento DOM para syncUp
+		if forceSync && ab.PureRef != nil && len(ab.PureRef) == 1 && ab.PureRef[0].Type == TokIdent {
+			forceMap := model.Get("_pranaForceMap")
+			if forceMap.IsUndefined() || forceMap.IsNull() {
+				forceMap = jsGlobal.Get("Object").New()
+				model.Set("_pranaForceMap", forceMap)
+			}
+			forceMap.Set(attName, ab.PureRef[0].StrVal)
+		}
+
 		tree.Attrs[attName] = ab
 		found = true
 	}

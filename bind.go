@@ -100,15 +100,46 @@ func (ps *PranaState) syncLocal(change *Change) {
 	doSync(ps.model, ps.Refs, ctx, ps, true, change)
 }
 
-// syncUp propaga mudanças para o componente pai (se existir e se MaySync=true).
-// Equivale ao dom.prana.syncUp do JS original (a parte ativa, pois o JS tem um
-// early return por ora — mantemos o mesmo comportamento).
+// syncUp propaga mudanças de dados do componente filho para o pai via
+// atributos marcados com & (forceSync). Lê o mapeamento _pranaForceMap
+// armazenado no elemento DOM pelo getReferences do pai.
 func (ps *PranaState) syncUp() {
-	if ps == nil || !ps.MaySync {
+	if ps == nil || ps.parent == nil {
 		return
 	}
-	// Comportamento idêntico ao JS: retorna imediatamente (lógica futura)
-	return
+
+	// Obtém o custom element: dom (container SPAN) → parentNode (shadow root) → host
+	shadowRoot := ps.dom.Get("parentNode")
+	if shadowRoot.IsUndefined() || shadowRoot.IsNull() {
+		return
+	}
+	self := shadowRoot.Get("host")
+	if self.IsUndefined() || self.IsNull() {
+		return
+	}
+
+	forceMap := self.Get("_pranaForceMap")
+	if forceMap.IsUndefined() || forceMap.IsNull() {
+		return
+	}
+
+	keys := jsGlobal.Get("Object").Call("keys", forceMap)
+	n := keys.Get("length").Int()
+	changed := false
+	for i := 0; i < n; i++ {
+		childKey := keys.Index(i).String()
+		parentKey := forceMap.Get(childKey).String()
+		childVal := ps.Data.M[childKey]
+		if ps.parent.Data.M[parentKey] != childVal {
+			ps.parent.Data.M[parentKey] = childVal
+			changed = true
+		}
+	}
+
+	if changed {
+		ps.parent.syncLocal(nil)
+		ps.parent.syncUp()
+	}
 }
 
 // sync combina syncLocal + syncUp.
