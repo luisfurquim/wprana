@@ -96,7 +96,7 @@ func defineCustomElement(tagName string, def *modDef) {
 		return nil
 	})
 
-	pranaDef.Call(tagName, constructorFn, connectedFn, attrChangedFn, disconnectedFn, jsObserved)
+	pranaDef.Invoke(tagName, constructorFn, connectedFn, attrChangedFn, disconnectedFn, jsObserved)
 	G.Printf(2, "defineCustomElement: %q definido\n", tagName)
 }
 
