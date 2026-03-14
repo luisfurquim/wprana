@@ -71,7 +71,9 @@ func syncElement(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, sync
 
 	// ── Filhos ────────────────────────────────────────────────────────────
 	childNodes := dom.Get("childNodes")
+	G.Printf(1, "syncElement: %d filhos ref, %d childNodes, dom tag=%s\n", len(ref.Children), childNodes.Get("length").Int(), tagName(dom))
 	for idx, childRef := range ref.Children {
+		G.Printf(1, "syncElement: processando filho idx=%d, cond=%q\n", idx, childRef.Cond)
 		child := childNodes.Index(idx)
 		if child.IsUndefined() || child.IsNull() {
 			G.Printf(4, "syncElement: filho %d não encontrado\n", idx)
@@ -117,6 +119,7 @@ func condSync(dom js.Value, ref *DOMRefNode, ctx Ctx, index any, state *PranaSta
 
 	// Avalia truthiness (equivale ao truthy do JS)
 	cond := isTruthy(res)
+	G.Printf(1, "condSync: cond=%q res=%v (type %T) truthy=%v\n", ref.Cond, res, res, cond)
 
 	if cond {
 		// Deve estar visível
@@ -316,7 +319,9 @@ func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown 
 
 	// ── Condicional ───────────────────────────────────────────────────────
 	if ref.Cond != "" {
-		condSync(dom, ref, ctx, nil, state, syncDown)
+		G.Printf(1, "doSync: condição %q, dom nodeType=%d tag=%s\n", ref.Cond, nodeType(dom), tagName(dom))
+		result := condSync(dom, ref, ctx, nil, state, syncDown)
+		G.Printf(1, "doSync: após condSync, result nodeType=%d\n", nodeType(result))
 		return
 	}
 
