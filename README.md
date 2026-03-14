@@ -308,12 +308,44 @@ And requires a pure reference (single `{{variable}}`), not mixed text like
 
 ### Events (Child to Parent)
 
-Use the `@` prefix to bind a child component event to a handler function in the
-parent. See [Parent-Child Communication](#parent-child-communication) for details.
+Use the `@` prefix in the **parent's template** to bind a child component event
+to a handler function defined in the parent's data. The child fires the event
+using `obj.Trigger("event_name")`.
 
 ```html
-<my-child @login_success="on_login"></my-child>
+<!-- Parent template: @event_name="handler_name" -->
+<my-login @login="on_login" @logout="on_logout"></my-login>
 ```
+
+The naming works like this:
+- `@login` is the **event name** — this is what the child passes to `Trigger`
+- `"on_login"` is the **handler function name** — looked up in the parent's data map
+
+The child fires the event using only the name **without** the `@` prefix:
+```go
+// In the CHILD's Render:
+obj.Trigger("login")       // matches @login in parent's template
+obj.Trigger("logout")      // matches @logout in parent's template
+```
+
+The handler must be a `func(...any)` in the parent's `InitData`:
+```go
+// In the PARENT's InitData:
+"on_login": func(args ...any) {
+    // handle login event
+},
+```
+
+You can pass arguments from the child to the parent handler:
+```go
+obj.Trigger("login", username, token)
+```
+
+Note: `@` event attributes are read directly from the DOM at trigger time, so
+they do **not** need to be listed in the child's observed attributes. Only
+attributes whose values change at runtime (like `&` bindings) need to be observed.
+
+See [Parent-Child Communication](#parent-child-communication) for a complete example.
 
 ## Reactive Data API
 
@@ -495,32 +527,38 @@ Use `&` prefix for two-way sync (child changes propagate back to parent):
 
 ### Dispatching Events Up (Trigger)
 
-Children can fire named events that invoke handler functions in the parent:
+Children fire named events that invoke handler functions in the parent.
+The `@` attribute in the parent's template maps event names to handler names:
 
-**Parent template:**
+**Parent template (app.html):**
 ```html
-<my-login @login_success="handle_login"></my-login>
+<!-- @login maps event "login" to handler function "on_login" -->
+<my-login @login="on_login"></my-login>
 ```
 
-**Parent InitData:**
+**Parent InitData (app.go):**
 ```go
 func (app *App) InitData() map[string]any {
     return map[string]any{
-        "handle_login": func(args ...any) {
-            // args contains whatever the child passed
+        // Handler function — must be func(...any)
+        "on_login": func(args ...any) {
             fmt.Println("Login successful!", args)
         },
     }
 }
 ```
 
-**Child Render:**
+**Child Render (login.go):**
 ```go
 func (lgn *Login) Render(obj *wprana.PranaObj) {
-    // After successful authentication:
-    obj.Trigger("login_success", username)
+    // Trigger uses the event name (without @), not the handler name
+    obj.Trigger("login", username)  // matches @login in parent template
 }
 ```
+
+The flow is: `obj.Trigger("login")` → looks up `@login` attribute on the
+child element → finds `"on_login"` → resolves `on_login` in the parent's
+data map → calls the function.
 
 ## Important Notes
 
