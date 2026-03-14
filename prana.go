@@ -154,16 +154,8 @@ func elementConstructor(self js.Value, tagName string, def *modDef) {
 		data = map[string]any{}
 	}
 
-	// Determina parent prana (para componentes aninhados)
-	var parentPrana *PranaState
-	if parentEl := findParentPranaElement(self); !parentEl.IsNull() && !parentEl.IsUndefined() {
-		if pst := getPranaState(parentEl); pst != nil {
-			parentPrana = pst
-		}
-	}
-
 	// Vincula dados ao DOM
-	rd := bindElement(data, container, htmlRoot, attrs, parentPrana)
+	rd := bindElement(data, container, htmlRoot, attrs)
 
 	// Guarda referência ao estado no registro do nó
 	nodeID, st := getOrCreateState(self)
@@ -202,8 +194,7 @@ func elementAttrChanged(self js.Value, name, oldVal, newVal string) {
 		}
 	}
 
-	// Propaga para o mapa de dados e dispara sync (somente local, sem syncUp,
-	// pois attribute changes são downstream: pai→filho).
+	// Propaga para o mapa de dados e dispara sync local.
 	st := getState(self)
 	if st == nil || st.State == nil {
 		return
@@ -305,6 +296,9 @@ func buildTrigger(self js.Value, rd *ReactiveData) func(eventName string, args .
 		// Resolve o nome do handler no contexto do pai
 		handler := getField(pst.Data.M, handlerName)
 		if fn, ok := handler.(func(...any)); ok {
+			G.Printf(4, "trigger: chamando %q com %d args\n", handlerName, len(args))
+			fn(args...)
+		} else if fn, ok := handler.(TriggerHandler); ok {
 			G.Printf(4, "trigger: chamando %q com %d args\n", handlerName, len(args))
 			fn(args...)
 		} else {

@@ -91,7 +91,6 @@ type PranaState struct {
 	Refs      *DOMRefNode
 	ForceSync bool
 	MaySync   bool
-	parent    *PranaState
 	dom       js.Value // SPAN container na shadow root
 	model     js.Value // raiz do conteúdo HTML template
 	lastEpoch uint64   // época do último sync (para prevenção de ciclos)
@@ -150,6 +149,11 @@ type PranaMod interface {
 	InitData() map[string]any
 	Render(obj *PranaObj)
 }
+
+// TriggerHandler é o tipo de função usada como handler de eventos @.
+// Use o valor nil literal (TriggerHandler(nil)) como placeholder no InitData;
+// defina o corpo real no Render, onde obj está disponível.
+type TriggerHandler func(...any)
 
 // ModFactory cria uma nova instância de PranaMod.
 type ModFactory func() PranaMod

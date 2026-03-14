@@ -89,7 +89,6 @@ func (r *ReactiveData) triggerSync(ch *Change) {
 		syncEpoch++
 		syncDepth++
 		r.state.syncLocal(ch)
-		r.state.syncUp()
 		syncDepth--
 	}
 }
@@ -111,59 +110,6 @@ func (ps *PranaState) syncLocal(change *Change) {
 	doSync(ps.model, ps.Refs, ctx, ps, true, change)
 }
 
-// syncUp propaga mudanças de dados do componente filho para o pai via
-// atributos marcados com & (forceSync). Lê o mapeamento _pranaForceMap
-// armazenado no elemento DOM pelo getReferences do pai.
-func (ps *PranaState) syncUp() {
-	if ps == nil || ps.parent == nil {
-		return
-	}
-	// Se o pai já foi sincronizado nesta época, não propaga.
-	if ps.parent.lastEpoch == syncEpoch {
-		return
-	}
-
-	// Obtém o custom element: dom (container SPAN) → parentNode (shadow root) → host
-	shadowRoot := ps.dom.Get("parentNode")
-	if shadowRoot.IsUndefined() || shadowRoot.IsNull() {
-		return
-	}
-	self := shadowRoot.Get("host")
-	if self.IsUndefined() || self.IsNull() {
-		return
-	}
-
-	forceMap := self.Get("_pranaForceMap")
-	if forceMap.IsUndefined() || forceMap.IsNull() {
-		return
-	}
-
-	keys := jsGlobal.Get("Object").Call("keys", forceMap)
-	n := keys.Get("length").Int()
-	changed := false
-	for i := 0; i < n; i++ {
-		childKey := keys.Index(i).String()
-		parentKey := forceMap.Get(childKey).String()
-		childVal := ps.Data.M[childKey]
-		if ps.parent.Data.M[parentKey] != childVal {
-			ps.parent.Data.M[parentKey] = childVal
-			changed = true
-		}
-	}
-
-	if changed {
-		ps.parent.syncLocal(nil)
-		ps.parent.syncUp()
-	}
-}
-
-// sync combina syncLocal + syncUp.
-// Equivale ao dom.prana.sync do JS original.
-func (ps *PranaState) sync(change *Change) {
-	ps.syncLocal(change)
-	ps.syncUp()
-}
-
 // ── bindElement ───────────────────────────────────────────────────────────────
 
 // bindElement associa data ao elemento dom usando model como template HTML.
@@ -174,8 +120,7 @@ func (ps *PranaState) sync(change *Change) {
 //	dom        - SPAN container na shadow root
 //	model      - raiz do template HTML (primeiro filho do shadow root após o CSS)
 //	attrs      - atributos do custom element (para inicializar dados)
-//	parentPrana - PranaState do componente pai (pode ser nil)
-func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]string, parentPrana *PranaState) *ReactiveData {
+func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]string) *ReactiveData {
 	state := &PranaState{
 		dom:   dom,
 		model: model,
@@ -193,10 +138,6 @@ func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]s
 	// Configura bindings bidirecionais para inputs com referências puras
 	if state.Refs != nil {
 		setupTwoWayBindingsInTree(model, state.Refs, state)
-	}
-
-	if parentPrana != nil {
-		state.parent = parentPrana
 	}
 
 	// Copia atributos do custom element para o mapa de dados.

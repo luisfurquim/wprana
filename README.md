@@ -328,12 +328,34 @@ obj.Trigger("login")       // matches @login in parent's template
 obj.Trigger("logout")      // matches @logout in parent's template
 ```
 
-The handler must be a `func(...any)` in the parent's `InitData`:
+The handler must be a `func(...any)` (or `wprana.TriggerHandler`) in the
+parent's data map.
+
+**Important:** In `InitData`, the `obj` parameter is not yet available —
+it only becomes available in `Render`. If your handler needs `obj` (which
+is almost always the case), use `wprana.TriggerHandler(nil)` as a
+placeholder in `InitData`, then set the real handler in `Render`:
+
 ```go
-// In the PARENT's InitData:
-"on_login": func(args ...any) {
-    // handle login event
-},
+func (app *App) InitData() map[string]any {
+    return map[string]any{
+        // Placeholder — obj is not available here
+        "on_login":  wprana.TriggerHandler(nil),
+        "on_logout": wprana.TriggerHandler(nil),
+    }
+}
+
+func (app *App) Render(obj *wprana.PranaObj) {
+    // Now obj is available — define the real handlers
+    obj.This.Set("on_login", func(args ...any) {
+        obj.This.Set("is_logged", true)
+        obj.This.Set("is_anonymous", false)
+    })
+    obj.This.Set("on_logout", func(args ...any) {
+        obj.This.Set("is_logged", false)
+        obj.This.Set("is_anonymous", true)
+    })
+}
 ```
 
 You can pass arguments from the child to the parent handler:
@@ -510,20 +532,20 @@ fn := wprana.JSFuncOnce(func() {
 
 ### Passing Data Down (Attributes)
 
-The parent passes data to children via attributes with `{{expression}}` bindings.
-Use `&` prefix for two-way sync (child changes propagate back to parent):
+The parent passes data to children via attributes with `{{expression}}` bindings:
 
 ```html
 <!-- Parent template -->
 <my-child
     title="{{page_title}}"
-    &is_logged="{{is_logged}}"
-    &is_anonymous="{{is_anonymous}}"
+    is_logged="{{is_logged}}"
+    is_anonymous="{{is_anonymous}}"
 ></my-child>
 ```
 
-- Without `&`: one-way (parent to child only)
-- With `&`: two-way (changes in child propagate back to parent)
+Data flows one-way: parent to child. When the parent's data changes, the
+child's attributes are updated automatically. To communicate from child
+back to parent, use [Triggers](#dispatching-events-up-trigger).
 
 ### Dispatching Events Up (Trigger)
 
@@ -536,15 +558,20 @@ The `@` attribute in the parent's template maps event names to handler names:
 <my-login @login="on_login"></my-login>
 ```
 
-**Parent InitData (app.go):**
+**Parent code (app.go):**
 ```go
 func (app *App) InitData() map[string]any {
     return map[string]any{
-        // Handler function — must be func(...any)
-        "on_login": func(args ...any) {
-            fmt.Println("Login successful!", args)
-        },
+        // Placeholder — obj not available yet
+        "on_login": wprana.TriggerHandler(nil),
     }
+}
+
+func (app *App) Render(obj *wprana.PranaObj) {
+    // Real handler with obj in scope
+    obj.This.Set("on_login", func(args ...any) {
+        obj.This.Set("is_logged", true)
+    })
 }
 ```
 
