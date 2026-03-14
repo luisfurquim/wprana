@@ -184,18 +184,19 @@ func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]s
 		state.parent = parentPrana
 	}
 
-	// Adiciona o modelo ao container
-	dom.Call("appendChild", model)
+	// Copia atributos do custom element para o mapa de dados
+	for _, a := range attrs {
+		data[a[0]] = a[1]
+	}
 
-	// Copia atributos do custom element para o mapa de dados e faz sync inicial.
-	// O setTimeout(10) do JS é simulado via goroutine.
-	go func() {
-		for _, a := range attrs {
-			data[a[0]] = a[1]
-		}
-		G.Printf(3, "bindElement: sync inicial\n")
-		state.syncLocal(nil)
-	}()
+	// Sync inicial ANTES de inserir no DOM: avalia condições (?), iterações (*),
+	// e bindings de texto/atributos. Elementos com condição falsa são substituídos
+	// por comentários, evitando que o browser instancie custom elements desnecessários.
+	G.Printf(3, "bindElement: sync inicial\n")
+	state.syncLocal(nil)
+
+	// Adiciona o modelo (já sincronizado) ao container
+	dom.Call("appendChild", model)
 
 	return rd
 }
