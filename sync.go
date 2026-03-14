@@ -64,17 +64,9 @@ func syncElement(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, sync
 			}
 		}
 
-		// ForceSync descendente: propaga para o root do shadow DOM
-		if syncDown && ab.ForceSync {
-			root := dom.Get("root")
-			if !root.IsUndefined() && !root.IsNull() {
-				prana := root.Get("prana")
-				if !prana.IsUndefined() && !prana.IsNull() {
-					// Sinaliza que forceSync está ativo - tratado pelo prana.go
-					root.Set("_pranaForceSync", true)
-				}
-			}
-		}
+		// ForceSync descendente: quando o pai atualiza um atributo & no filho,
+		// propaga a mudança para o estado interno do filho via attributeChangedCallback.
+		// Isso acontece automaticamente pelo setAttribute acima + observed attributes.
 	}
 
 	// ── Filhos ────────────────────────────────────────────────────────────
@@ -86,14 +78,6 @@ func syncElement(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, sync
 			continue
 		}
 		doSync(child, childRef, ctx, state, syncDown, nil)
-		// Propaga maySync para raízes de shadow DOM filhos
-		childRoot := child.Get("root")
-		if !childRoot.IsUndefined() && !childRoot.IsNull() {
-			pr := childRoot.Get("prana")
-			if !pr.IsUndefined() && !pr.IsNull() {
-				childRoot.Set("_pranaMaySync", true)
-			}
-		}
 	}
 }
 
