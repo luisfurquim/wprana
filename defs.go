@@ -94,6 +94,7 @@ type PranaState struct {
 	parent    *PranaState
 	dom       js.Value // SPAN container na shadow root
 	model     js.Value // raiz do conteúdo HTML template
+	syncing   bool     // guarda contra re-entrância: true enquanto sync está rodando
 }
 
 // ReactiveData encapsula o mapa de dados com notificação de mudança.

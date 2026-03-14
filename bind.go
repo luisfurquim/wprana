@@ -92,10 +92,13 @@ func (r *ReactiveData) triggerSync(ch *Change) {
 
 // syncLocal sincroniza o DOM com o estado de dados atual.
 // Equivale ao dom.prana.syncLocal do JS original.
+// A guarda ps.syncing previne re-entrância (propagação circular).
 func (ps *PranaState) syncLocal(change *Change) {
-	if ps == nil || ps.Refs == nil {
+	if ps == nil || ps.Refs == nil || ps.syncing {
 		return
 	}
+	ps.syncing = true
+	defer func() { ps.syncing = false }()
 	ctx := Ctx{ps.Data.M}
 	doSync(ps.model, ps.Refs, ctx, ps, true, change)
 }
@@ -104,7 +107,7 @@ func (ps *PranaState) syncLocal(change *Change) {
 // atributos marcados com & (forceSync). Lê o mapeamento _pranaForceMap
 // armazenado no elemento DOM pelo getReferences do pai.
 func (ps *PranaState) syncUp() {
-	if ps == nil || ps.parent == nil {
+	if ps == nil || ps.parent == nil || ps.parent.syncing {
 		return
 	}
 
@@ -184,9 +187,11 @@ func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]s
 		state.parent = parentPrana
 	}
 
-	// Copia atributos do custom element para o mapa de dados
+	// Copia atributos do custom element para o mapa de dados.
+	// Coerce o valor string do atributo para o tipo existente no InitData,
+	// evitando que bool/int/float sejam corrompidos para string.
 	for _, a := range attrs {
-		data[a[0]] = a[1]
+		data[a[0]] = coerceToType(a[1], data[a[0]])
 	}
 
 	// Sync inicial ANTES de inserir no DOM: avalia condições (?), iterações (*),
