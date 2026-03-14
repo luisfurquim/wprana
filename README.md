@@ -17,13 +17,12 @@ WebAssembly in the browser.
   - [Two-Way Binding](#two-way-binding)
   - [Events (Child to Parent)](#events-child-to-parent)
 - [Reactive Data API](#reactive-data-api)
-- [Helper Functions](#helper-functions)
-  - [Event Management](#event-management)
-  - [DOM Queries](#dom-queries)
-  - [Timers](#timers)
-  - [Location](#location)
-  - [LocalStorage](#localstorage)
-  - [JavaScript Interop](#javascript-interop)
+- [Helper Packages](#helper-packages)
+  - [wprana/dom — Events and Queries](#wpranadom--events-and-queries)
+  - [wprana/timer — Timers](#wpranatimer--timers)
+  - [wprana/location — Browser Location](#wpranalocation--browser-location)
+  - [wprana/localstorage — LocalStorage](#wpranalocalstorage--localstorage)
+  - [JavaScript Interop (core)](#javascript-interop-core)
 - [Component Lifecycle](#component-lifecycle)
 - [Parent-Child Communication](#parent-child-communication)
 - [Important Notes](#important-notes)
@@ -132,6 +131,7 @@ package counter
 import (
     _ "embed"
     "github.com/luisfurquim/wprana"
+    "github.com/luisfurquim/wprana/timer"
 )
 
 //go:embed counter.html
@@ -162,7 +162,7 @@ func (c *Counter) InitData() map[string]any {
 func (c *Counter) Render(obj *wprana.PranaObj) {
     // Set up a ticker that increments count every second
     go func() {
-        tk := wprana.NewTicker(1000)
+        tk := timer.NewTicker(1000)
         defer tk.Stop()
         n := 0
         for range tk.Tick {
@@ -403,19 +403,24 @@ func (c *MyComponent) Render(obj *wprana.PranaObj) {
 }
 ```
 
-## Helper Functions
+## Helper Packages
 
-### Event Management
+Helper functions are organized into subpackages so applications only
+import what they actually use, keeping the WASM binary lean.
+
+### wprana/dom — Events and Queries
+
+`import "github.com/luisfurquim/wprana/dom"`
 
 Register DOM event listeners with automatic `preventDefault` and `stopPropagation`
 support:
 
 ```go
 func (c *MyComponent) Render(obj *wprana.PranaObj) {
-    forms := wprana.Query(obj.Dom, "form")
+    forms := dom.Query(obj.Dom, "form")
     if len(forms) > 0 {
         // Register submit handler with preventDefault
-        handlerID := wprana.AddEvent(forms[0], "submit",
+        handlerID := dom.AddEvent(forms[0], "submit",
             func(this js.Value, args []js.Value) any {
                 username := obj.This.Get("username").(string)
                 password := obj.This.Get("password").(string)
@@ -427,7 +432,7 @@ func (c *MyComponent) Render(obj *wprana.PranaObj) {
         )
 
         // Later, to remove the handler:
-        // wprana.RmEvent(handlerID)
+        // dom.RmEvent(handlerID)
     }
 }
 ```
@@ -435,36 +440,27 @@ func (c *MyComponent) Render(obj *wprana.PranaObj) {
 **API:**
 
 ```go
-// AddEvent registers an event listener. Returns an ID for removal.
-func AddEvent(dom js.Value, eventName string,
+func dom.AddEvent(el js.Value, eventName string,
     handler func(this js.Value, args []js.Value) any,
     preventDefault, stopPropagation bool) int64
 
-// RmEvent removes a previously registered event listener.
-func RmEvent(id int64)
+func dom.RmEvent(id int64)
+
+func dom.Query(el js.Value, selector string) []js.Value
 ```
 
-### DOM Queries
+### wprana/timer — Timers
 
-```go
-// Query wraps querySelectorAll returning a []js.Value
-func Query(dom js.Value, selector string) []js.Value
-
-// Examples:
-buttons := wprana.Query(obj.Dom, "button.primary")
-inputs := wprana.Query(obj.Dom, "input[type='text']")
-```
-
-### Timers
+`import "github.com/luisfurquim/wprana/timer"`
 
 ```go
 // Sleep blocks the current goroutine for ms milliseconds,
 // yielding control to the JS event loop.
-wprana.Sleep(2000) // sleep 2 seconds
+timer.Sleep(2000)
 
 // NewTicker sends on Tick channel every ms milliseconds.
 // Call Stop() to release resources.
-tk := wprana.NewTicker(1000)
+tk := timer.NewTicker(1000)
 defer tk.Stop()
 for range tk.Tick {
     // called every second
@@ -472,51 +468,55 @@ for range tk.Tick {
 
 // SetTimeout schedules fn after delay ms.
 // Returns a channel that closes on completion.
-done := wprana.SetTimeout(func() {
+done := timer.SetTimeout(func() {
     fmt.Println("fired!")
 }, 5000)
 <-done // wait for it
 
 // SetInterval schedules fn every interval ms.
 // Returns a cancel function.
-cancel := wprana.SetInterval(func() {
+cancel := timer.SetInterval(func() {
     fmt.Println("tick")
 }, 1000)
 // later:
 cancel()
 ```
 
-### Location
+### wprana/location — Browser Location
+
+`import "github.com/luisfurquim/wprana/location"`
 
 ```go
 // Get window.location.href as *url.URL
-loc, err := wprana.GetLocation()
+loc, err := location.Get()
 
 // Get top.location.href as *url.URL (useful inside iframes)
-topLoc, err := wprana.GetTopLocation()
+topLoc, err := location.GetTop()
 ```
 
-### LocalStorage
+### wprana/localstorage — LocalStorage
+
+`import "github.com/luisfurquim/wprana/localstorage"`
 
 Access `localStorage` with pluggable serialization. Implement the
-`LSEncoder` and `LSDecoder` interfaces to choose your encoding strategy
+`Encoder` and `Decoder` interfaces to choose your encoding strategy
 (JSON, Gob+base64, etc.):
 
 ```go
-type LSEncoder interface {
+type Encoder interface {
     Encode(inpval any) string
 }
 
-type LSDecoder interface {
+type Decoder interface {
     Decode(buf string, outval any) error
 }
 ```
 
-Create a `LS` instance with your encoder/decoder and use it throughout
+Create an `LS` instance with your encoder/decoder and use it throughout
 the component:
 
 ```go
-ls := wprana.NewLS(myEncoder, myDecoder)
+ls := localstorage.New(myEncoder, myDecoder)
 
 // Store a value
 ls.Set("user", map[string]any{"name": "Ana", "age": 30})
@@ -524,7 +524,7 @@ ls.Set("user", map[string]any{"name": "Ana", "age": 30})
 // Retrieve a value (outval must be a pointer)
 var user map[string]any
 err := ls.Get("user", &user)
-if errors.Is(err, wprana.ErrLSKeyNotFound) {
+if errors.Is(err, localstorage.ErrKeyNotFound) {
     // key does not exist
 }
 
@@ -541,7 +541,9 @@ name, ok := ls.Key(0)
 ls.Clear()
 ```
 
-### JavaScript Interop
+### JavaScript Interop (core)
+
+These functions remain in the core `wprana` package:
 
 ```go
 // Access the global window object
@@ -664,10 +666,10 @@ template variables used in attributes (`?condition`, `&attr`, `@event`) must use
 
 ```html
 <!-- CORRECT -->
-<my-child ?is_logged &is_anonymous="{{is_anonymous}}"></my-child>
+<my-child ?is_logged is_anonymous="{{is_anonymous}}"></my-child>
 
 <!-- WRONG -->
-<my-child ?isLogged &isAnonymous="{{isAnonymous}}"></my-child>
+<my-child ?isLogged isAnonymous="{{isAnonymous}}"></my-child>
 ```
 
 Note: variables used only in text content (`{{camelCase}}`) are not affected by
@@ -719,6 +721,8 @@ import (
     _ "embed"
     "syscall/js"
     "github.com/luisfurquim/wprana"
+    "github.com/luisfurquim/wprana/dom"
+    "github.com/luisfurquim/wprana/timer"
 )
 
 //go:embed mywidget.html
@@ -759,9 +763,9 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
     })
 
     // Set up form handler
-    forms := wprana.Query(obj.Dom, "form")
+    forms := dom.Query(obj.Dom, "form")
     if len(forms) > 0 {
-        wprana.AddEvent(forms[0], "submit",
+        dom.AddEvent(forms[0], "submit",
             func(this js.Value, args []js.Value) any {
                 val := obj.This.Get("input_val").(string)
                 obj.This.Append("items", map[string]any{"label": val})
@@ -772,7 +776,7 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
 
     // Increment counter every 2 seconds
     go func() {
-        tk := wprana.NewTicker(2000)
+        tk := timer.NewTicker(2000)
         defer tk.Stop()
         n := 0
         for range tk.Tick {
