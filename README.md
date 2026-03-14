@@ -21,6 +21,8 @@ WebAssembly in the browser.
   - [Event Management](#event-management)
   - [DOM Queries](#dom-queries)
   - [Timers](#timers)
+  - [Location](#location)
+  - [LocalStorage](#localstorage)
   - [JavaScript Interop](#javascript-interop)
 - [Component Lifecycle](#component-lifecycle)
 - [Parent-Child Communication](#parent-child-communication)
@@ -482,6 +484,61 @@ cancel := wprana.SetInterval(func() {
 }, 1000)
 // later:
 cancel()
+```
+
+### Location
+
+```go
+// Get window.location.href as *url.URL
+loc, err := wprana.GetLocation()
+
+// Get top.location.href as *url.URL (useful inside iframes)
+topLoc, err := wprana.GetTopLocation()
+```
+
+### LocalStorage
+
+Access `localStorage` with pluggable serialization. Implement the
+`LSEncoder` and `LSDecoder` interfaces to choose your encoding strategy
+(JSON, Gob+base64, etc.):
+
+```go
+type LSEncoder interface {
+    Encode(inpval any) string
+}
+
+type LSDecoder interface {
+    Decode(buf string, outval any) error
+}
+```
+
+Create a `LS` instance with your encoder/decoder and use it throughout
+the component:
+
+```go
+ls := wprana.NewLS(myEncoder, myDecoder)
+
+// Store a value
+ls.Set("user", map[string]any{"name": "Ana", "age": 30})
+
+// Retrieve a value (outval must be a pointer)
+var user map[string]any
+err := ls.Get("user", &user)
+if errors.Is(err, wprana.ErrLSKeyNotFound) {
+    // key does not exist
+}
+
+// Remove a key
+ls.Del("user")
+
+// Number of keys
+n := ls.Len()
+
+// Get key name by index
+name, ok := ls.Key(0)
+
+// Clear all keys
+ls.Clear()
 ```
 
 ### JavaScript Interop

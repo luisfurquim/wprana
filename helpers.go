@@ -187,4 +187,74 @@ func (tk *Ticker) Stop() {
 	close(tk.Tick)
 }
 
+// ── LocalStorage helpers ────────────────────────────────────────────────────
+
+// LSEncoder codifica um valor Go para string (para gravar no localStorage).
+type LSEncoder interface {
+	Encode(inpval any) string
+}
+
+// LSDecoder decodifica uma string do localStorage para um valor Go.
+// outval deve ser um ponteiro para o tipo destino.
+type LSDecoder interface {
+	Decode(buf string, outval any) error
+}
+
+// LS encapsula o acesso ao localStorage com serialização configurável.
+type LS struct {
+	enc LSEncoder
+	dec LSDecoder
+	st  js.Value
+}
+
+// NewLS cria um wrapper de localStorage com o encoder/decoder fornecidos.
+func NewLS(enc LSEncoder, dec LSDecoder) *LS {
+	return &LS{
+		enc: enc,
+		dec: dec,
+		st:  jsGlobal.Get("localStorage"),
+	}
+}
+
+// Set grava key no localStorage usando o encoder configurado.
+func (ls *LS) Set(key string, val any) {
+	ls.st.Call("setItem", key, ls.enc.Encode(val))
+}
+
+// Get lê key do localStorage e decodifica em outval.
+// outval deve ser ponteiro para o tipo destino.
+// Retorna erro se a chave não existir ou se o decode falhar.
+func (ls *LS) Get(key string, outval any) error {
+	v := ls.st.Call("getItem", key)
+	if v.IsNull() || v.IsUndefined() {
+		return ErrLSKeyNotFound
+	}
+	return ls.dec.Decode(v.String(), outval)
+}
+
+// Del remove key do localStorage.
+func (ls *LS) Del(key string) {
+	ls.st.Call("removeItem", key)
+}
+
+// Clear remove todas as chaves do localStorage.
+func (ls *LS) Clear() {
+	ls.st.Call("clear")
+}
+
+// Key retorna o nome da chave no índice index.
+// Retorna ("", false) se o índice estiver fora do intervalo.
+func (ls *LS) Key(index int) (string, bool) {
+	v := ls.st.Call("key", index)
+	if v.IsNull() || v.IsUndefined() {
+		return "", false
+	}
+	return v.String(), true
+}
+
+// Len retorna o número de chaves no localStorage.
+func (ls *LS) Len() int {
+	return ls.st.Get("length").Int()
+}
+
 
