@@ -260,7 +260,7 @@ func waitAndRender(self js.Value, mod PranaMod, rd *ReactiveData, attrs [][2]str
 		Trigger: triggerFn,
 	}
 
-	G.Printf(2, "waitAndRender: chamando Render() para %s\n", self.Get("_pranaTag").String())
+	G.Printf(3, "waitAndRender: chamando Render() para %s\n", self.Get("_pranaTag").String())
 	mod.Render(pObj)
 }
 
