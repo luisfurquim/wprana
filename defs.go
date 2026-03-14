@@ -184,6 +184,7 @@ var (
 )
 
 func init() {
+	G.Set(4) // TODO: remover após debug
 	jsGlobal = js.Global()
 	jsDoc = jsGlobal.Get("document")
 }
