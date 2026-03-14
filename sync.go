@@ -43,32 +43,8 @@ func syncElement(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, sync
 	}
 
 	// ── Atributos ──────────────────────────────────────────────────────────
-	// childPrana acumula o PranaState do filho (se houver forceSync direto)
-	// para sincronizar o filho DEPOIS de todos os atributos terem sido escritos.
-	var childPrana *PranaState
-
 	for attrName, ab := range ref.Attrs {
 		val := solveAll(ab.Segs, ctx)
-
-		// Compartilhamento direto Go-level para atributos forceSync em
-		// elementos prana: escreve o valor tipado diretamente no mapa de
-		// dados do filho, sem passar pelo DOM (evita conversão para string
-		// e corrupção de tipo).
-		if ab.ForceSync && ab.PureRef != nil {
-			if cp := getPranaState(dom); cp != nil {
-				var rawVal any
-				for j := range ctx {
-					rawVal = solve(ab.PureRef, ctx[j])
-					if rawVal != nil {
-						break
-					}
-				}
-				if rawVal != nil {
-					cp.Data.M[attrName] = rawVal
-					childPrana = cp
-				}
-			}
-		}
 
 		dom.Call("setAttribute", attrName, val)
 
@@ -88,12 +64,6 @@ func syncElement(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, sync
 				}
 			}
 		}
-	}
-
-	// Sincroniza o filho prana após todos os atributos forceSync terem sido
-	// escritos. A guarda por época previne sync redundante.
-	if childPrana != nil {
-		childPrana.syncLocal(nil)
 	}
 
 	// ── Filhos ────────────────────────────────────────────────────────────
