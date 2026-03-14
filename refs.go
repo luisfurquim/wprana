@@ -249,7 +249,10 @@ func setupTwoWayBinding(dom js.Value, pureRef []RefNode, state *PranaState, ctxP
 		ctx := *twb.CtxPtr
 		container, key := refOf(twb.Ref, ctx)
 		if container != nil && key != "" {
-			if setField(container, key, newVal) {
+			// Coerce o valor string do DOM para o tipo registrado no mapa de dados,
+			// garantindo que bool/int/float não sejam corrompidos para string.
+			typedVal := coerceToType(newVal, getField(container, key))
+			if setField(container, key, typedVal) {
 				G.Printf(4, "setupTwoWayBinding: atualizado %q = %q\n", key, newVal)
 				if state != nil {
 					state.syncLocal(nil)

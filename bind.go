@@ -81,24 +81,32 @@ func (r *ReactiveData) Sync() {
 	r.triggerSync(nil)
 }
 
+// triggerSync inicia uma nova cadeia de propagação.
+// Incrementa a época global para que componentes já sincronizados nesta
+// cadeia sejam ignorados, quebrando ciclos de propagação circular.
 func (r *ReactiveData) triggerSync(ch *Change) {
 	if r.state != nil {
+		syncEpoch++
+		syncDepth++
 		r.state.syncLocal(ch)
 		r.state.syncUp()
+		syncDepth--
 	}
 }
 
 // ── PranaState ────────────────────────────────────────────────────────────────
 
 // syncLocal sincroniza o DOM com o estado de dados atual.
-// Equivale ao dom.prana.syncLocal do JS original.
-// A guarda ps.syncing previne re-entrância (propagação circular).
+// A guarda por época previne re-entrância: se este componente já foi
+// sincronizado na época corrente, a chamada é ignorada.
 func (ps *PranaState) syncLocal(change *Change) {
-	if ps == nil || ps.Refs == nil || ps.syncing {
+	if ps == nil || ps.Refs == nil {
 		return
 	}
-	ps.syncing = true
-	defer func() { ps.syncing = false }()
+	if ps.lastEpoch == syncEpoch {
+		return // já sincronizado nesta época
+	}
+	ps.lastEpoch = syncEpoch
 	ctx := Ctx{ps.Data.M}
 	doSync(ps.model, ps.Refs, ctx, ps, true, change)
 }
@@ -107,7 +115,11 @@ func (ps *PranaState) syncLocal(change *Change) {
 // atributos marcados com & (forceSync). Lê o mapeamento _pranaForceMap
 // armazenado no elemento DOM pelo getReferences do pai.
 func (ps *PranaState) syncUp() {
-	if ps == nil || ps.parent == nil || ps.parent.syncing {
+	if ps == nil || ps.parent == nil {
+		return
+	}
+	// Se o pai já foi sincronizado nesta época, não propaga.
+	if ps.parent.lastEpoch == syncEpoch {
 		return
 	}
 
@@ -158,11 +170,11 @@ func (ps *PranaState) sync(change *Change) {
 // Cria o PranaState, extrai referências, e agenda a sincronização inicial.
 // Equivale à função bind() do JS original.
 //
-//   data       - mapa de dados inicial (de PranaMod.InitData())
-//   dom        - SPAN container na shadow root
-//   model      - raiz do template HTML (primeiro filho do shadow root após o CSS)
-//   attrs      - atributos do custom element (para inicializar dados)
-//   parentPrana - PranaState do componente pai (pode ser nil)
+//	data       - mapa de dados inicial (de PranaMod.InitData())
+//	dom        - SPAN container na shadow root
+//	model      - raiz do template HTML (primeiro filho do shadow root após o CSS)
+//	attrs      - atributos do custom element (para inicializar dados)
+//	parentPrana - PranaState do componente pai (pode ser nil)
 func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]string, parentPrana *PranaState) *ReactiveData {
 	state := &PranaState{
 		dom:   dom,
@@ -194,14 +206,14 @@ func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]s
 		data[a[0]] = coerceToType(a[1], data[a[0]])
 	}
 
-	// Sync inicial ANTES de inserir no DOM: avalia condições (?), iterações (*),
-	// e bindings de texto/atributos. Elementos com condição falsa são substituídos
-	// por comentários, evitando que o browser instancie custom elements desnecessários.
+	// Sync inicial e inserção no DOM dentro de syncDepth, para que
+	// elementAttrChanged disparado pelo browser durante appendChild
+	// não inicie uma nova época (é parte desta mesma cadeia de propagação).
 	G.Printf(3, "bindElement: sync inicial\n")
+	syncDepth++
 	state.syncLocal(nil)
-
-	// Adiciona o modelo (já sincronizado) ao container
 	dom.Call("appendChild", model)
+	syncDepth--
 
 	return rd
 }

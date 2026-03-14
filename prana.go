@@ -209,6 +209,15 @@ func elementAttrChanged(self js.Value, name, oldVal, newVal string) {
 		return
 	}
 	st.State.Data.M[name] = coerceToType(newVal, st.State.Data.M[name])
+
+	// Se estamos FORA de uma cadeia de sync (syncDepth==0), é uma mudança
+	// externa (e.g. JavaScript do usuário). Inicia nova época para que o
+	// syncLocal prossiga mesmo que o componente já tenha sido sincronizado.
+	// Se estamos DENTRO de uma cadeia (syncDepth>0), usa a época corrente:
+	// o syncLocal será ignorado se o componente já foi sincronizado nesta época.
+	if syncDepth == 0 {
+		syncEpoch++
+	}
 	st.State.syncLocal(nil)
 }
 
