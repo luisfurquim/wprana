@@ -123,7 +123,21 @@ func elementConstructor(self js.Value, tagName string, def *modDef) {
 
 	// Parseia o template HTML
 	tmpl := domCreateTemplate(def.html)
-	htmlRoot := tmpl.Get("content").Call("cloneNode", true).Get("children").Index(0)
+	content := tmpl.Get("content").Call("cloneNode", true)
+
+	// Se o template tem um único elemento filho, usa-o diretamente.
+	// Caso contrário, envolve todos os childNodes num <span> wrapper
+	// para que bindElement receba sempre um único nó raiz.
+	var htmlRoot js.Value
+	children := content.Get("children")
+	if children.Get("length").Int() == 1 && content.Get("childNodes").Get("length").Int() == 1 {
+		htmlRoot = children.Index(0)
+	} else {
+		htmlRoot = domCreateSpan()
+		for content.Get("childNodes").Get("length").Int() > 0 {
+			htmlRoot.Call("appendChild", content.Get("childNodes").Index(0))
+		}
+	}
 
 	// Lê atributos do elemento para dados iniciais
 	var attrs [][2]string
