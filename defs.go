@@ -94,7 +94,7 @@ type PranaState struct {
 	parent    *PranaState
 	dom       js.Value // SPAN container na shadow root
 	model     js.Value // raiz do conteúdo HTML template
-	syncing   bool     // guarda contra re-entrância: true enquanto sync está rodando
+	lastEpoch uint64   // época do último sync (para prevenção de ciclos)
 }
 
 // ReactiveData encapsula o mapa de dados com notificação de mudança.
@@ -176,6 +176,18 @@ var (
 
 	// jsSVGNS é o namespace SVG.
 	jsSVGNS = "http://www.w3.org/2000/svg"
+
+	// syncEpoch é o contador global de épocas de propagação.
+	// Cada cadeia de propagação (Set, Delete, etc.) incrementa a época.
+	// Componentes já sincronizados na época corrente são ignorados,
+	// quebrando ciclos de propagação circular.
+	// Inicia em 1 para que lastEpoch=0 (default de PranaState) seja sempre < syncEpoch.
+	syncEpoch uint64 = 1
+
+	// syncDepth conta o nível de aninhamento de sync (0 = nenhum sync em curso).
+	// Usado para distinguir elementAttrChanged disparado internamente (por
+	// setAttribute durante sync) de mudanças externas (JavaScript do usuário).
+	syncDepth int
 )
 
 // jsVars são inicializadas em init() para evitar chamadas repetidas.
