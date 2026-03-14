@@ -8,9 +8,9 @@ import (
 	"github.com/luisfurquim/goose"
 )
 
-// G é o logger global do pacote. Níveis: 1=erro, 2=principal, 3=detalhe,
+// G é o logger global do pacote. Níveis recomendados: 1=somente erros, 2=geral, 3=detalhe,
 // 4=debug leve, 5=debug verboso, 6=debug sensível.
-var G goose.Alert
+var G goose.Alert = goose.Alert(2)
 
 // ── Constantes de tipo de token ──────────────────────────────────────────────
 
@@ -201,7 +201,6 @@ var (
 )
 
 func init() {
-	G.Set(4) // TODO: remover após debug
 	jsGlobal = js.Global()
 	jsDoc = jsGlobal.Get("document")
 }
