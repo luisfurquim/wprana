@@ -2,7 +2,10 @@
 
 package wprana
 
-import "syscall/js"
+import (
+	"net/url"
+	"syscall/js"
+)
 
 // JSGlobal retorna js.Global() para uso nos pacotes de módulo.
 func JSGlobal() js.Value {
@@ -25,6 +28,20 @@ func JSFuncOnce(fn func()) js.Func {
 // O chamador é responsável por chamar Release() quando não precisar mais.
 func JSFunc(fn func(this js.Value, args []js.Value) any) js.Func {
 	return js.FuncOf(fn)
+}
+
+// ── Location helpers ────────────────────────────────────────────────────────
+
+// GetLocation retorna window.location.href como *url.URL.
+func GetLocation() (*url.URL, error) {
+	href := jsGlobal.Get("location").Get("href").String()
+	return url.Parse(href)
+}
+
+// GetTopLocation retorna top.location.href como *url.URL.
+func GetTopLocation() (*url.URL, error) {
+	href := jsGlobal.Get("top").Get("location").Get("href").String()
+	return url.Parse(href)
 }
 
 // ── Event helpers ────────────────────────────────────────────────────────────
