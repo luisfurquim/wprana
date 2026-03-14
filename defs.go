@@ -3,14 +3,10 @@
 package wprana
 
 import (
-	"errors"
 	"syscall/js"
 
 	"github.com/luisfurquim/goose"
 )
-
-// ErrLSKeyNotFound é retornado por LS.Get quando a chave não existe no localStorage.
-var ErrLSKeyNotFound = errors.New("wprana: localStorage key not found")
 
 // G é o logger global do pacote. Níveis recomendados: 1=somente erros, 2=geral, 3=detalhe,
 // 4=debug leve, 5=debug verboso, 6=debug sensível.
