@@ -132,6 +132,39 @@ func toStr(v any) string {
 	}
 }
 
+// coerceToType converte a string s para o mesmo tipo de existing.
+// Usado em elementAttrChanged para preservar o tipo original do dado
+// (HTML attributes são sempre strings, mas o mapa de dados pode ter bool, int, etc.).
+func coerceToType(s string, existing any) any {
+	if existing == nil {
+		return s
+	}
+	switch existing.(type) {
+	case bool:
+		return s == "true"
+	case int:
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return s
+		}
+		return n
+	case int64:
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return s
+		}
+		return n
+	case float64:
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return s
+		}
+		return f
+	default:
+		return s
+	}
+}
+
 // ── Resolução de referências ──────────────────────────────────────────────────
 
 // solve percorre a árvore de referência e resolve o valor contra ctx.
