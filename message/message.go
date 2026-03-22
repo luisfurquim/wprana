@@ -111,35 +111,29 @@ func ensureListener() {
 	})
 }
 
-// waitController aguarda o Service Worker estar ativo e retorna o controller.
-// Usa navigator.serviceWorker.ready (Promise) para esperar.
-func waitController() (js.Value, error) {
+// getController retorna o controller do Service Worker, ou erro se não disponível.
+// Usa polling com setTimeout para aguardar até maxWait milissegundos.
+func getController() (js.Value, error) {
 	sw := jsGlobal.Get("navigator").Get("serviceWorker")
 	if sw.IsUndefined() || sw.IsNull() {
 		return js.Value{}, errors.New("message: serviceWorker not supported")
 	}
 
-	// Se já tem controller, retorna direto
-	controller := sw.Get("controller")
-	if !controller.IsNull() && !controller.IsUndefined() {
-		return controller, nil
-	}
-
-	// Aguarda o SW ficar pronto via navigator.serviceWorker.ready
-	done := make(chan js.Value, 1)
-	ready := sw.Get("ready")
-	ready.Call("then", js.FuncOf(func(this js.Value, args []js.Value) any {
-		if len(args) > 0 {
-			done <- args[0].Get("active")
+	const maxAttempts = 50 // 50 × 100ms = 5s máximo
+	for i := 0; i < maxAttempts; i++ {
+		controller := sw.Get("controller")
+		if !controller.IsNull() && !controller.IsUndefined() {
+			return controller, nil
 		}
-		return nil
-	}))
-
-	reg := <-done
-	if reg.IsUndefined() || reg.IsNull() {
-		return js.Value{}, errors.New("message: service worker not active after ready")
+		// Cede ao event loop via setTimeout (não bloqueia o JS)
+		done := make(chan struct{})
+		jsGlobal.Call("setTimeout", js.FuncOf(func(this js.Value, args []js.Value) any {
+			close(done)
+			return nil
+		}), 100)
+		<-done
 	}
-	return reg, nil
+	return js.Value{}, errors.New("message: service worker controller not available after 5s")
 }
 
 // Send envia uma mensagem ao Service Worker e bloqueia até receber a resposta.
@@ -148,7 +142,7 @@ func waitController() (js.Value, error) {
 func Send(msgType string, replyType string, msg map[string]any) (Reply, error) {
 	RegisterReplyType(replyType)
 
-	controller, err := waitController()
+	controller, err := getController()
 	if err != nil {
 		return Reply{}, err
 	}
