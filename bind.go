@@ -150,7 +150,7 @@ func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]s
 	// Sync inicial e inserção no DOM dentro de syncDepth, para que
 	// elementAttrChanged disparado pelo browser durante appendChild
 	// não inicie uma nova época (é parte desta mesma cadeia de propagação).
-	G.Printf(3, "bindElement: sync inicial\n")
+	G.Printf(4, "bindElement: sync inicial\n")
 	syncDepth++
 	state.syncLocal(nil)
 	dom.Call("appendChild", model)
