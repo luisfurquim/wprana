@@ -111,15 +111,46 @@ func ensureListener() {
 	})
 }
 
+// waitController aguarda o Service Worker estar ativo e retorna o controller.
+// Usa navigator.serviceWorker.ready (Promise) para esperar.
+func waitController() (js.Value, error) {
+	sw := jsGlobal.Get("navigator").Get("serviceWorker")
+	if sw.IsUndefined() || sw.IsNull() {
+		return js.Value{}, errors.New("message: serviceWorker not supported")
+	}
+
+	// Se já tem controller, retorna direto
+	controller := sw.Get("controller")
+	if !controller.IsNull() && !controller.IsUndefined() {
+		return controller, nil
+	}
+
+	// Aguarda o SW ficar pronto via navigator.serviceWorker.ready
+	done := make(chan js.Value, 1)
+	ready := sw.Get("ready")
+	ready.Call("then", js.FuncOf(func(this js.Value, args []js.Value) any {
+		if len(args) > 0 {
+			done <- args[0].Get("active")
+		}
+		return nil
+	}))
+
+	reg := <-done
+	if reg.IsUndefined() || reg.IsNull() {
+		return js.Value{}, errors.New("message: service worker not active after ready")
+	}
+	return reg, nil
+}
+
 // Send envia uma mensagem ao Service Worker e bloqueia até receber a resposta.
 // O campo "type" e "requestId" são adicionados automaticamente ao mapa msg.
 // replyType é o tipo de mensagem que o SW deve usar na resposta.
 func Send(msgType string, replyType string, msg map[string]any) (Reply, error) {
 	RegisterReplyType(replyType)
 
-	controller := jsGlobal.Get("navigator").Get("serviceWorker").Get("controller")
-	if controller.IsNull() || controller.IsUndefined() {
-		return Reply{}, errors.New("message: no service worker controller")
+	controller, err := waitController()
+	if err != nil {
+		return Reply{}, err
 	}
 
 	id := atomic.AddUint64(&nextID, 1)
