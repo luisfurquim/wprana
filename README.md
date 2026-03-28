@@ -21,6 +21,7 @@ WebAssembly in the browser.
   - [wprana/dom — Events and Queries](#wpranadom--events-and-queries)
   - [wprana/timer — Timers](#wpranatimer--timers)
   - [wprana/location — Browser Location](#wpranalocation--browser-location)
+  - [wprana.KeyStorage — Storage Interface](#wpranakeystorage--storage-interface)
   - [wprana/localstorage — LocalStorage](#wpranalocalstorage--localstorage)
   - [JavaScript Interop (core)](#javascript-interop-core)
 - [Component Lifecycle](#component-lifecycle)
@@ -494,12 +495,45 @@ loc, err := location.Get()
 topLoc, err := location.GetTop()
 ```
 
+### wprana.KeyStorage — Storage Interface
+
+The `wprana.KeyStorage` interface defines a backend-agnostic key-value
+storage API. It accepts arbitrary Go values and relies on an
+Encoder/Decoder pair for serialization. Any storage backend (localStorage,
+OPFS, IndexedDB, etc.) can implement this interface:
+
+```go
+type KeyStorage interface {
+    Set(key string, val any) error
+    Get(key string, outval any) error
+    Del(key string) error
+    Exists(key string) (bool, int64, error)
+}
+```
+
+Modules that need persistent storage should accept a `wprana.KeyStorage`
+instead of a concrete type. This way the application's `main()` decides
+which backend to use:
+
+```go
+// In a module package:
+var Store wprana.KeyStorage
+
+// In main():
+import "github.com/luisfurquim/wprana/localstorage"
+
+myModule.Store = localstorage.NewKV(nil, nil)
+```
+
 ### wprana/localstorage — LocalStorage
 
 `import "github.com/luisfurquim/wprana/localstorage"`
 
-Access `localStorage` with pluggable serialization. Implement the
-`Encoder` and `Decoder` interfaces to choose your encoding strategy
+Access browser `localStorage` with pluggable serialization.
+
+#### Encoder / Decoder
+
+Implement these interfaces to choose your encoding strategy
 (JSON, Gob+base64, etc.):
 
 ```go
@@ -512,32 +546,69 @@ type Decoder interface {
 }
 ```
 
-Create an `LS` instance with your encoder/decoder and use it throughout
-the component:
+If you pass `nil` for either parameter, a built-in default codec is used.
+It handles common Go types out of the box:
+
+| Type | Encode | Decode |
+|------|--------|--------|
+| `string` | passthrough | passthrough |
+| `[]byte` | `string(v)` | `[]byte(s)` |
+| `bool` | `"true"` / `"false"` | `strconv.ParseBool` |
+| `int`, `int8`–`int64` | `strconv.FormatInt` | `strconv.ParseInt` |
+| `uint`, `uint8`–`uint64` | `strconv.FormatUint` | `strconv.ParseUint` |
+| `float32`, `float64` | `strconv.FormatFloat` | `strconv.ParseFloat` |
+
+#### KV — Recommended API (implements wprana.KeyStorage)
+
+`KV` is the recommended way to use localStorage. It implements
+`wprana.KeyStorage`:
 
 ```go
-ls := localstorage.New(myEncoder, myDecoder)
+// Create with default codec (handles string, int, float, bool, etc.)
+kv := localstorage.NewKV(nil, nil)
+
+// Or with a custom encoder/decoder
+kv := localstorage.NewKV(myEncoder, myDecoder)
 
 // Store a value
-ls.Set("user", map[string]any{"name": "Ana", "age": 30})
+err := kv.Set("username", "Ana")
 
 // Retrieve a value (outval must be a pointer)
-var user map[string]any
-err := ls.Get("user", &user)
+var name string
+err := kv.Get("username", &name)
 if errors.Is(err, localstorage.ErrKeyNotFound) {
     // key does not exist
 }
 
+// Check existence and get stored string length
+exists, size, err := kv.Exists("username")
+
 // Remove a key
+err := kv.Del("username")
+```
+
+#### LS — Legacy API
+
+`LS` provides the original API with pluggable Encoder/Decoder. It does
+**not** implement `wprana.KeyStorage` (its `Set` and `Del` methods do not
+return errors). New code should use `KV` instead.
+
+```go
+ls := localstorage.New(myEncoder, myDecoder)
+
+// Or with the default codec
+ls := localstorage.New(nil, nil)
+
+ls.Set("user", map[string]any{"name": "Ana", "age": 30})
+
+var user map[string]any
+err := ls.Get("user", &user)
+
 ls.Del("user")
 
-// Number of keys
+// Iteration helpers (not available on KV)
 n := ls.Len()
-
-// Get key name by index
 name, ok := ls.Key(0)
-
-// Clear all keys
 ls.Clear()
 ```
 

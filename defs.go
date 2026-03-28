@@ -132,6 +132,18 @@ type NodeState struct {
 	TwoWay map[string]*TwoWayBinding
 }
 
+// ── Key-value storage interface ──────────────────────────────────────────────
+
+// KeyStorage defines a key-value storage backend that accepts arbitrary
+// Go values. Implementations are responsible for serializing values
+// (typically via an Encoder/Decoder pair).
+type KeyStorage interface {
+	Set(key string, val any) error
+	Get(key string, outval any) error
+	Del(key string) error
+	Exists(key string) (bool, int64, error)
+}
+
 // ── Interface pública do módulo ───────────────────────────────────────────────
 
 // PranaObj é passado ao método Render do módulo.
