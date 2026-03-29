@@ -168,8 +168,10 @@ func coerceToType(s string, existing any) any {
 // ── Resolução de referências ──────────────────────────────────────────────────
 
 // solve percorre a árvore de referência e resolve o valor contra ctx.
-// Equivale ao solve() do JS original.
-func solve(tree []RefNode, ctx any) any {
+// fullCtx é a pilha completa de contextos, usada para resolver sub-expressões
+// (ex.: o índice [fi] em filtered_options[fi]) que podem estar em camadas
+// diferentes de onde o identificador raiz foi encontrado.
+func solve(tree []RefNode, ctx any, fullCtx Ctx) any {
 	if tree == nil {
 		return ctx
 	}
@@ -185,7 +187,17 @@ func solve(tree []RefNode, ctx any) any {
 		case TokIdent:
 			sym = getField(sym, tree[i].StrVal)
 		case TokExpr:
-			key := solve(tree[i].Sub, ctx)
+			// Resolve a sub-expressão contra a pilha completa de contextos,
+			// não apenas contra a camada atual. Isso permite que índices de
+			// iteração (ex.: fi, si) sejam encontrados na camada do ndxMap
+			// mesmo quando o array foi encontrado na camada de dados.
+			var key any
+			for _, layer := range fullCtx {
+				key = solve(tree[i].Sub, layer, fullCtx)
+				if key != nil {
+					break
+				}
+			}
 			sym = getAt(sym, key)
 		}
 	}
@@ -207,7 +219,7 @@ func solveAll(segs []TextSegment, ctx Ctx) string {
 		// Busca na pilha de contextos
 		var val any
 		for j := range ctx {
-			val = solve(segs[i].Ref, ctx[j])
+			val = solve(segs[i].Ref, ctx[j], ctx)
 			if val != nil {
 				break
 			}
@@ -277,7 +289,13 @@ func refOf(tree []RefNode, ctx Ctx) (container any, key string) {
 		case TokNum:
 			nextKey = tree[i].IntVal
 		case TokExpr:
-			resolved := solve(tree[i].Sub, ctx[0])
+			var resolved any
+			for _, layer := range ctx {
+				resolved = solve(tree[i].Sub, layer, ctx)
+				if resolved != nil {
+					break
+				}
+			}
 			nextKey = resolved
 		}
 	}

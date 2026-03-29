@@ -103,7 +103,7 @@ func condSync(dom js.Value, ref *DOMRefNode, ctx Ctx, index any, state *PranaSta
 	// Resolve condição
 	var res any
 	for i := range ctx {
-		res = solve(tree, ctx[i])
+		res = solve(tree, ctx[i], ctx)
 		if res != nil {
 			break
 		}
@@ -216,7 +216,7 @@ func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown 
 		// Resolve o array no contexto
 		var arr []any
 		for j := range ctx {
-			v := solve(st.Tree, ctx[j])
+			v := solve(st.Tree, ctx[j], ctx)
 			if v != nil {
 				if a, ok := v.([]any); ok {
 					arr = arr[:0]
