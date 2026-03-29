@@ -25,6 +25,11 @@ WebAssembly in the browser.
   - [wprana/localstorage — LocalStorage](#wpranalocalstorage--localstorage)
   - [wprana/opfs — Origin Private File System](#wpranaopfs--origin-private-file-system)
   - [JavaScript Interop (core)](#javascript-interop-core)
+- [Customizable Widgets](#customizable-widgets)
+  - [Customizable Interface](#customizable-interface)
+  - [wprana.Update — Dynamic CSS](#wpranaupdate--dynamic-css)
+- [Built-in Widgets](#built-in-widgets)
+  - [wprana/widget/combobox — Multi-select Combobox](#wpranawidgetcombobox--multi-select-combobox)
 - [Component Lifecycle](#component-lifecycle)
 - [Parent-Child Communication](#parent-child-communication)
 - [Important Notes](#important-notes)
@@ -682,6 +687,125 @@ fn := wprana.JSFuncOnce(func() {
     // handle callback
 })
 ```
+
+## Customizable Widgets
+
+Modules that implement only `PranaMod` have fixed CSS. Modules that also
+implement `Customizable` allow consuming applications to replace parts of
+their CSS at runtime — for example, changing the color scheme without
+touching the layout rules.
+
+### Customizable Interface
+
+```go
+// CSSPart is a named section of a component's CSS.
+type CSSPart struct {
+    Name    string
+    Content string
+}
+
+// Customizable extends PranaMod with CSS customization.
+type Customizable interface {
+    PranaMod
+    ListCSS() []CSSPart
+    ReplaceCSS(key string, content string)
+}
+```
+
+- **`ListCSS()`** returns the CSS parts in order. The order matters: for
+  example, a "Vars" part defining CSS custom properties must come before
+  a "Design" part that uses `var()` references.
+- **`ReplaceCSS(key, content)`** replaces the named part and updates all
+  live instances immediately via `wprana.Update()`.
+
+### wprana.Update — Dynamic CSS
+
+```go
+wprana.Update(tagName string, cssContent string)
+```
+
+Replaces the CSS of a registered custom element and updates the `<style>`
+tag in the Shadow DOM of every live instance. Called automatically by
+`ReplaceCSS`; can also be called directly for full CSS replacement.
+
+## Built-in Widgets
+
+### wprana/widget/combobox — Multi-select Combobox
+
+`import _ "github.com/luisfurquim/wprana/widget/combobox"`
+
+A multi-select combobox with type-ahead filtering, tag display, and
+keyboard support.
+
+```html
+<wp-combobox
+    options='["Alpha","Beta","Gamma"]'
+    placeholder="Type to filter..."
+    @notinlist="on_notinlist"
+    @change="on_change">
+</wp-combobox>
+```
+
+**Attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `options` | JSON array of strings or `[{"label":"…","value":"…"},…]` objects |
+| `placeholder` | Input placeholder text (default: "Type to filter...") |
+
+**Events (via `@`):**
+
+| Event | Args | Description |
+|-------|------|-------------|
+| `@notinlist` | typed string | Enter pressed with text not matching any option |
+| `@change` | `[]any` of selected items | Selection changed (add or remove) |
+
+**CSS Customization:**
+
+The combobox CSS is split into two parts:
+
+- **Vars** — CSS custom properties for colors, shadows, etc. Replace
+  this to change the visual theme:
+
+```go
+cb := combobox.New()
+cb.ReplaceCSS("Vars", `
+:host {
+    --cb-tag-bg: #1e293b;
+    --cb-tag-color: #e2e8f0;
+    --cb-tag-border: #475569;
+    --cb-accent: #3b82f6;
+    /* ... */
+}
+`)
+```
+
+- **Design** — Layout, spacing, transitions. Uses `var()` references for
+  all colors, so changing Vars is enough for most themes.
+
+Available CSS custom properties:
+
+| Variable | Default | Used for |
+|----------|---------|----------|
+| `--cb-tag-bg` | `#ede9fe` | Selected tag background |
+| `--cb-tag-color` | `#4c1d95` | Selected tag text |
+| `--cb-tag-border` | `#c4b5fd` | Selected tag border |
+| `--cb-rm-color` | `#7c3aed` | Remove button color |
+| `--cb-rm-hover-bg` | `#ddd6fe` | Remove button hover background |
+| `--cb-rm-hover-color` | `#dc2626` | Remove button hover color |
+| `--cb-input-border` | `#d1d5db` | Input border |
+| `--cb-input-focus-border` | `#7c3aed` | Input focus border |
+| `--cb-input-focus-shadow` | `rgba(124,58,237,0.12)` | Input focus ring |
+| `--cb-input-bg` | `#fff` | Input background |
+| `--cb-drop-bg` | `#ffffff` | Dropdown background |
+| `--cb-drop-border` | `#d1d5db` | Dropdown border |
+| `--cb-drop-shadow` | (see vars.css) | Dropdown shadow |
+| `--cb-scroll-thumb` | `#c4b5fd` | Scrollbar thumb |
+| `--cb-opt-color` | `#1f2937` | Option text |
+| `--cb-opt-hover-bg` | `#f5f3ff` | Option hover background |
+| `--cb-opt-hover-color` | `#5b21b6` | Option hover text |
+| `--cb-opt-active-bg` | `#ede9fe` | Option active background |
+| `--cb-empty-color` | `#9ca3af` | "No results" text |
 
 ## Component Lifecycle
 

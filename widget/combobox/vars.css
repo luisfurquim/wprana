@@ -1,0 +1,25 @@
+/* ── Color variables ─────────────────────────────────────────────────────────
+   Override these to theme the combobox without changing the layout.
+   Use ReplaceCSS("Vars", yourCSS) or set them on an ancestor element. */
+
+:host {
+   --cb-tag-bg: #ede9fe;
+   --cb-tag-color: #4c1d95;
+   --cb-tag-border: #c4b5fd;
+   --cb-rm-color: #7c3aed;
+   --cb-rm-hover-bg: #ddd6fe;
+   --cb-rm-hover-color: #dc2626;
+   --cb-input-border: #d1d5db;
+   --cb-input-focus-border: #7c3aed;
+   --cb-input-focus-shadow: rgba(124, 58, 237, 0.12);
+   --cb-input-bg: #fff;
+   --cb-drop-bg: #ffffff;
+   --cb-drop-border: #d1d5db;
+   --cb-drop-shadow: 0 4px 16px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+   --cb-scroll-thumb: #c4b5fd;
+   --cb-opt-color: #1f2937;
+   --cb-opt-hover-bg: #f5f3ff;
+   --cb-opt-hover-color: #5b21b6;
+   --cb-opt-active-bg: #ede9fe;
+   --cb-empty-color: #9ca3af;
+}

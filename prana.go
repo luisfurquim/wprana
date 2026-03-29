@@ -165,6 +165,9 @@ func elementConstructor(self js.Value, tagName string, def *modDef) {
 	self.Set("_pranaTag", tagName)
 	self.Set("_pranaNodeId", nodeID)
 
+	// Rastreia a instância para Update() poder atualizar o CSS
+	instanceRegistry[tagName] = append(instanceRegistry[tagName], self)
+
 	// Lança goroutine que aguarda conexão e então chama Render
 	go waitAndRender(self, mod, rd, attrs)
 }
@@ -214,13 +217,23 @@ func elementAttrChanged(self js.Value, name, oldVal, newVal string) {
 
 // elementDisconnected é chamado quando o elemento é removido do DOM.
 func elementDisconnected(self js.Value) {
-	G.Printf(3, "elementDisconnected: %s\n", self.Get("_pranaTag").String())
+	tag := self.Get("_pranaTag").String()
+	G.Printf(3, "elementDisconnected: %s\n", tag)
 	nodeID, ok := getNodeID(self)
 	if !ok {
 		return
 	}
 	releaseTwoWayBindings(nodeID)
 	delete(nodeRegistry, nodeID)
+
+	// Remove da lista de instâncias vivas
+	instances := instanceRegistry[tag]
+	for i, inst := range instances {
+		if inst.Equal(self) {
+			instanceRegistry[tag] = append(instances[:i], instances[i+1:]...)
+			break
+		}
+	}
 }
 
 // ── Espera por conexão e chama Render ─────────────────────────────────────────
@@ -377,6 +390,37 @@ func (o *ObservedData) Delete(key string) {
 			}), 100)
 			<-done
 		}()
+	}
+}
+
+// ── Atualização dinâmica de CSS ───────────────────────────────────────────────
+
+// Update substitui o CSS de um custom element já registrado e atualiza
+// o <style> no Shadow DOM de todas as instâncias vivas.
+// Deve ser chamado por módulos Customizable quando ReplaceCSS é invocado.
+func Update(tagName string, cssContent string) {
+	def, exists := moduleRegistry[tagName]
+	if !exists {
+		G.Printf(1, "Update: módulo %q não encontrado\n", tagName)
+		return
+	}
+	def.css = cssContent
+
+	// Atualiza o <style> de todas as instâncias vivas
+	for _, self := range instanceRegistry[tagName] {
+		shadowRoot := self.Get("shadowRoot")
+		if shadowRoot.IsNull() || shadowRoot.IsUndefined() {
+			continue
+		}
+		styleNode := shadowRoot.Call("querySelector", "style")
+		if styleNode.IsNull() || styleNode.IsUndefined() {
+			// Instância sem <style> (css era vazio no Register original);
+			// cria um novo <style> como primeiro filho.
+			styleNode = domCreateStyleNode(cssContent)
+			shadowRoot.Call("insertBefore", styleNode, shadowRoot.Get("firstChild"))
+			continue
+		}
+		styleNode.Set("innerText", cssContent)
 	}
 }
 

@@ -1,0 +1,29 @@
+<div class="cb-root">
+
+   <!-- Selected items displayed as removable tags.
+        Uses ** iteration on the container div; the first child element (span)
+        becomes the template cloned for each selected item.
+        data-si holds the iteration index, read by the delegated click handler
+        in Render to identify which tag the × button belongs to. -->
+   <div class="cb-tags" **selected_items:si>
+      <span class="cb-tag">{{selected_items[si].label}}<button class="cb-rm" data-si="{{si}}">&#x2715;</button></span>
+   </div>
+
+   <!-- Text input with two-way binding.
+        The &value binding keeps input_val in sync with the DOM:
+          data → DOM: obj.This.Set("input_val","") clears the field on selection.
+          DOM → data: typing updates input_val automatically. -->
+   <input class="cb-input" &value="{{input_val}}" type="text" placeholder="{{placeholder}}" autocomplete="off" spellcheck="false" />
+
+   <!-- Dropdown wrapper.  display is toggled directly via JS (showDrop/hideDrop)
+        so this element is always in the DOM and can be queried at Render time.
+        CSS sets the initial state to display:none.
+        .cb-drop uses ** iteration on the option divs.
+        data-fi holds the iteration index for the delegated click handler. -->
+   <div class="cb-drop-wrap">
+      <div class="cb-drop" **filtered_options:fi>
+         <div class="cb-opt" data-fi="{{fi}}">{{filtered_options[fi].label}}</div>
+      </div>
+   </div>
+
+</div>

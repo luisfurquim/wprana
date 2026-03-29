@@ -168,6 +168,25 @@ type PranaMod interface {
 // defina o corpo real no Render, onde obj está disponível.
 type TriggerHandler func(...any)
 
+// CSSPart representa uma seção nomeada de CSS de um componente.
+// A ordem dos CSSParts importa: Vars deve vir antes de Design,
+// pois Design pode usar variáveis definidas em Vars.
+type CSSPart struct {
+	Name    string
+	Content string
+}
+
+// Customizable é uma interface opcional que módulos podem implementar
+// para permitir que aplicações consumidoras alterem partes do CSS.
+// Módulos que satisfazem apenas PranaMod têm CSS fixo; módulos que
+// satisfazem Customizable permitem substituição de seções de CSS
+// (ex.: trocar apenas as variáveis de cor, mantendo o layout).
+type Customizable interface {
+	PranaMod
+	ListCSS() []CSSPart
+	ReplaceCSS(key string, content string)
+}
+
 // ModFactory cria uma nova instância de PranaMod.
 type ModFactory func() PranaMod
 
@@ -187,6 +206,10 @@ var (
 
 	// nodeRegistry armazena o estado Go-side de nós DOM, indexado por _pranaId.
 	nodeRegistry = map[int64]*NodeState{}
+
+	// instanceRegistry rastreia as instâncias vivas de cada custom element
+	// por tagName, permitindo que Update() atualize o CSS de todas elas.
+	instanceRegistry = map[string][]js.Value{}
 
 	// nextNodeID é o próximo ID a ser atribuído.
 	nextNodeID int64 = 1

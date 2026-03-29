@@ -1,0 +1,165 @@
+/* :host targets the wp-combobox custom element itself (Shadow DOM). */
+:host {
+   display: block;
+   position: relative;
+   font-family: inherit;
+   font-size: inherit;
+   color: inherit;
+}
+
+/* ── Root container ──────────────────────────────────────────────────────── */
+
+.cb-root {
+   position: relative;
+   width: 100%;
+   box-sizing: border-box;
+}
+
+/* ── Selected tags ───────────────────────────────────────────────────────── */
+
+.cb-tags {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 4px;
+   padding-bottom: 4px;
+   /* Empty flex container collapses to zero height — no extra spacing
+      when nothing is selected. */
+}
+
+/* The * iteration plug inserts a <span> wrapper; display:contents makes it
+   transparent to flexbox so .cb-tag items flow naturally. */
+.cb-tags > span {
+   display: contents;
+}
+
+.cb-tag {
+   display: inline-flex;
+   align-items: center;
+   gap: 4px;
+   background: var(--cb-tag-bg);
+   color: var(--cb-tag-color);
+   border: 1px solid var(--cb-tag-border);
+   border-radius: 4px;
+   padding: 2px 6px 2px 8px;
+   font-size: 0.85em;
+   line-height: 1.4;
+   white-space: nowrap;
+}
+
+.cb-rm {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   background: none;
+   border: none;
+   cursor: pointer;
+   color: var(--cb-rm-color);
+   padding: 0;
+   width: 16px;
+   height: 16px;
+   font-size: 0.85em;
+   border-radius: 2px;
+   line-height: 1;
+   transition: background 0.1s, color 0.1s;
+}
+
+.cb-rm:hover {
+   background: var(--cb-rm-hover-bg);
+   color: var(--cb-rm-hover-color);
+}
+
+/* ── Text input ──────────────────────────────────────────────────────────── */
+
+.cb-input {
+   display: block;
+   width: 100%;
+   padding: 7px 10px;
+   border: 1px solid var(--cb-input-border);
+   border-radius: 6px;
+   font-size: 1em;
+   font-family: inherit;
+   color: inherit;
+   background: var(--cb-input-bg);
+   outline: none;
+   box-sizing: border-box;
+   transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.cb-input:focus {
+   border-color: var(--cb-input-focus-border);
+   box-shadow: 0 0 0 3px var(--cb-input-focus-shadow);
+}
+
+/* ── Dropdown wrapper ────────────────────────────────────────────────────── */
+
+/* Initial state is display:none.  Render() toggles this via dropWrap.style. */
+.cb-drop-wrap {
+   display: none;
+   position: absolute;
+   z-index: 1000;
+   top: calc(100% + 4px);
+   left: 0;
+   right: 0;
+   background: var(--cb-drop-bg);
+   border: 1px solid var(--cb-drop-border);
+   border-radius: 6px;
+   box-shadow: var(--cb-drop-shadow);
+   max-height: 240px;
+   overflow-y: auto;
+   /* Thin scrollbar on supporting browsers */
+   scrollbar-width: thin;
+   scrollbar-color: var(--cb-scroll-thumb) transparent;
+}
+
+.cb-drop-wrap::-webkit-scrollbar {
+   width: 6px;
+}
+
+.cb-drop-wrap::-webkit-scrollbar-thumb {
+   background: var(--cb-scroll-thumb);
+   border-radius: 3px;
+}
+
+/* ── Option items ────────────────────────────────────────────────────────── */
+
+.cb-drop {
+   padding: 4px 0;
+}
+
+/* Same plug transparency for the options list. */
+.cb-drop > span {
+   display: contents;
+}
+
+/* Empty state: when filtered_options is empty, cb-drop collapses.
+   A small message is shown via CSS ::after so we avoid an extra template
+   element. */
+.cb-drop:empty::after {
+   content: "No results";
+   display: block;
+   padding: 10px 14px;
+   color: var(--cb-empty-color);
+   font-size: 0.875em;
+   font-style: italic;
+}
+
+.cb-opt {
+   padding: 8px 14px;
+   cursor: pointer;
+   font-size: 0.95em;
+   color: var(--cb-opt-color);
+   border-radius: 4px;
+   margin: 0 4px;
+   transition: background 0.1s, color 0.1s;
+   /* Prevent text selection while clicking quickly */
+   user-select: none;
+}
+
+.cb-opt:hover {
+   background: var(--cb-opt-hover-bg);
+   color: var(--cb-opt-hover-color);
+}
+
+.cb-opt:active {
+   background: var(--cb-opt-active-bg);
+}
