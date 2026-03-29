@@ -165,18 +165,17 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		}
 
 		if noSpan {
-			// ** : o parent node é o container; model continua sendo o template
-			parent := model.Get("parentNode")
-			_, pst := getOrCreateState(parent)
-			pst.Model = model
+			// ** : o próprio elemento é o container;
+			// seu primeiro filho-elemento é o template/model.
+			firstChild := model.Get("firstElementChild")
+			_, pst := getOrCreateState(model)
+			pst.Model = firstChild
 			pst.ACtrl = arrayVar
 			pst.AIndex = arrayIdx
 			pst.Tree = arrTree
 
-			plug := plugElement(model)
-			gp := parent.Get("parentNode")
-			gp.Call("replaceChild", plug, parent)
-			plug.Call("appendChild", parent)
+			// Remove o template do DOM vivo (fica guardado em pst.Model)
+			model.Call("removeChild", firstChild)
 		} else {
 			// * : plug substitui model; model vira plug.model
 			plug := plugElement(model)
