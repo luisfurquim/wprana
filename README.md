@@ -23,6 +23,7 @@ WebAssembly in the browser.
   - [wprana/location — Browser Location](#wpranalocation--browser-location)
   - [wprana.KeyStorage — Storage Interface](#wpranakeystorage--storage-interface)
   - [wprana/localstorage — LocalStorage](#wpranalocalstorage--localstorage)
+  - [wprana/opfs — Origin Private File System](#wpranaopfs--origin-private-file-system)
   - [JavaScript Interop (core)](#javascript-interop-core)
 - [Component Lifecycle](#component-lifecycle)
 - [Parent-Child Communication](#parent-child-communication)
@@ -521,8 +522,13 @@ var Store wprana.KeyStorage
 
 // In main():
 import "github.com/luisfurquim/wprana/localstorage"
+import "github.com/luisfurquim/wprana/opfs"
 
+// Option A: localStorage backend
 myModule.Store = localstorage.NewKV(nil, nil)
+
+// Option B: OPFS backend (recommended for larger/sensitive data)
+myModule.Store = opfs.New(nil, nil)
 ```
 
 ### wprana/localstorage — LocalStorage
@@ -611,6 +617,45 @@ n := ls.Len()
 name, ok := ls.Key(0)
 ls.Clear()
 ```
+
+### wprana/opfs — Origin Private File System
+
+`import "github.com/luisfurquim/wprana/opfs"`
+
+Access the browser's [Origin Private File System](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)
+directly from Go WASM. Files are stored in a sandboxed, origin-scoped
+filesystem that is invisible to the user and not subject to the same
+storage limits as localStorage.
+
+`opfs.Store` implements `wprana.KeyStorage` and uses the same
+Encoder/Decoder pattern as `localstorage.KV`. If `nil` is passed for
+either parameter, the built-in default codec is used (same type table
+as localstorage).
+
+```go
+// Create with default codec
+store := opfs.New(nil, nil)
+
+// Store a value
+err := store.Set("my-key", "hello world")
+
+// Retrieve a value (outval must be a pointer)
+var val string
+err := store.Get("my-key", &val)
+if errors.Is(err, opfs.ErrNotFound) {
+    // key does not exist
+}
+
+// Check existence and get stored size in bytes
+exists, size, err := store.Exists("my-key")
+
+// Remove a key (no error if it does not exist)
+err := store.Del("my-key")
+```
+
+The store accesses OPFS via the asynchronous File System API
+(`navigator.storage.getDirectory()`), called directly through
+`syscall/js`. No Service Worker is required.
 
 ### JavaScript Interop (core)
 
