@@ -26,12 +26,6 @@
       when nothing is selected. */
 }
 
-/* The * iteration plug inserts a <span> wrapper; display:contents makes it
-   transparent to flexbox so .cb-tag items flow naturally. */
-.cb-tags > span {
-   display: contents;
-}
-
 .cb-tag {
    display: inline-flex;
    align-items: center;
@@ -124,11 +118,6 @@
 
 .cb-drop {
    padding: 4px 0;
-}
-
-/* Same plug transparency for the options list. */
-.cb-drop > span {
-   display: contents;
 }
 
 /* Empty state: when filtered_options is empty, cb-drop collapses.
