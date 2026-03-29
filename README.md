@@ -269,6 +269,11 @@ Produces:
 The parent element itself becomes the container (no extra wrapper):
 
 ```html
+<!--
+   Important! With **, the iterator attribute goes on the CONTAINER element
+   (here <ul>), not on the repeated child. The first child element (<li>)
+   becomes the template that is cloned for each array item.
+-->
 <ul **items:i>
    <li>{{items[i].label}}</li>
 </ul>
