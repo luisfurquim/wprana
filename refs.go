@@ -168,6 +168,10 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 			// ** : o próprio elemento é o container;
 			// seu primeiro filho-elemento é o template/model.
 			firstChild := model.Get("firstElementChild")
+
+			// Extrai referências do template ANTES de removê-lo do DOM
+			tree.ModelRef = getReferences(firstChild, model, modelRoot)
+
 			_, pst := getOrCreateState(model)
 			pst.Model = firstChild
 			pst.ACtrl = arrayVar

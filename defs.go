@@ -65,6 +65,7 @@ type DOMRefNode struct {
 	ArrayVar string                  // variável de controle de iteração (vazio se nenhum)
 	ArrayIdx string                  // variável de índice de iteração
 	NoSpan   bool                    // prefixo **: modelo é o próprio parent
+	ModelRef *DOMRefNode             // ref do template filho para ** (noSpan)
 	Cond     string                  // expressão condicional (vazio se nenhum)
 	CondTree []RefNode               // árvore parseada da condição
 }

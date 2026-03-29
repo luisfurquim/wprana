@@ -240,6 +240,12 @@ func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown 
 			}
 		}
 
+		// Para **, o ref do template está em ModelRef; para *, o ref já contém os bindings
+		syncRef := ref
+		if ref.NoSpan && ref.ModelRef != nil {
+			syncRef = ref.ModelRef
+		}
+
 		// Sincroniza filhos existentes com itens do array
 		childNodes := dom.Get("childNodes")
 		i := 0
@@ -259,10 +265,10 @@ func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown 
 			itemCtx := []any{arr[i]}
 			itemCtxFull := buildCtx(ndx, itemCtx, ctx)
 
-			if ref.Cond != "" {
-				condSync(child, ref, itemCtxFull, i, state, syncDown)
+			if syncRef.Cond != "" {
+				condSync(child, syncRef, itemCtxFull, i, state, syncDown)
 			} else {
-				syncElement(child, ref, itemCtxFull, state, syncDown)
+				syncElement(child, syncRef, itemCtxFull, state, syncDown)
 			}
 			i++
 		}
@@ -275,10 +281,10 @@ func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown 
 
 			// Sincroniza o modelo antes de clonar
 			model := st.Model
-			if ref.Cond != "" {
-				condSync(model, ref, itemCtxFull, i, state, syncDown)
+			if syncRef.Cond != "" {
+				condSync(model, syncRef, itemCtxFull, i, state, syncDown)
 			} else {
-				syncElement(model, ref, itemCtxFull, state, syncDown)
+				syncElement(model, syncRef, itemCtxFull, state, syncDown)
 			}
 
 			cloned := cloneNode(model)
