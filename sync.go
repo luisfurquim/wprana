@@ -69,12 +69,12 @@ func syncElement(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, sync
 
 	// ── Filhos ────────────────────────────────────────────────────────────
 	childNodes := dom.Get("childNodes")
-	G.Printf(4, "syncElement: %d filhos ref, %d childNodes, dom tag=%s\n", len(ref.Children), childNodes.Get("length").Int(), tagName(dom))
+	G.Logf(4, "syncElement: %d filhos ref, %d childNodes, dom tag=%s\n", len(ref.Children), childNodes.Get("length").Int(), tagName(dom))
 	for idx, childRef := range ref.Children {
-		G.Printf(5, "syncElement: processando filho idx=%d, cond=%q\n", idx, childRef.Cond)
+		G.Logf(5, "syncElement: processando filho idx=%d, cond=%q\n", idx, childRef.Cond)
 		child := childNodes.Index(idx)
 		if child.IsUndefined() || child.IsNull() {
-			G.Printf(4, "syncElement: filho %d não encontrado\n", idx)
+			G.Logf(4, "syncElement: filho %d não encontrado\n", idx)
 			continue
 		}
 		doSync(child, childRef, ctx, state, syncDown, nil)
@@ -93,7 +93,7 @@ func condSync(dom js.Value, ref *DOMRefNode, ctx Ctx, index any, state *PranaSta
 		// Estava escondido: tree vem do modelo guardado no estado
 		st := getState(dom)
 		if st == nil || st.CondModel.IsUndefined() {
-			G.Printf(1, "condSync: comentário sem CondModel no registry\n")
+			G.Logf(1, "condSync: comentário sem CondModel no registry\n")
 			return dom
 		}
 		tree = ref.CondTree
@@ -125,7 +125,7 @@ func condSync(dom js.Value, ref *DOMRefNode, ctx Ctx, index any, state *PranaSta
 	default:
 		cond = isTruthy(res)
 	}
-	G.Printf(4, "condSync: cond=%q op=%q val=%q res=%v (type %T) result=%v\n", ref.Cond, ref.CondOp, ref.CondVal, res, res, cond)
+	G.Logf(4, "condSync: cond=%q op=%q val=%q res=%v (type %T) result=%v\n", ref.Cond, ref.CondOp, ref.CondVal, res, res, cond)
 
 	if cond {
 		// Deve estar visível
@@ -218,7 +218,7 @@ func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown 
 	if ref.ArrayVar != "" {
 		st := getState(dom)
 		if st == nil {
-			G.Printf(1, "doSync: nó de array sem estado: %q\n", ref.ArrayVar)
+			G.Logf(1, "doSync: nó de array sem estado: %q\n", ref.ArrayVar)
 			return
 		}
 
@@ -232,12 +232,12 @@ func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown 
 					arr = a
 					break
 				}
-				G.Printf(3, "doSync: arrayVar %q não é []any: %T\n", ref.ArrayVar, v)
+				G.Logf(3, "doSync: arrayVar %q não é []any: %T\n", ref.ArrayVar, v)
 				return
 			}
 		}
 		if arr == nil {
-			G.Printf(2, "doSync: símbolo não resolvido para iteração: %q\n", ref.ArrayVar)
+			G.Logf(2, "doSync: símbolo não resolvido para iteração: %q\n", ref.ArrayVar)
 			return
 		}
 
@@ -331,9 +331,9 @@ func doSync(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown 
 
 	// ── Condicional ───────────────────────────────────────────────────────
 	if ref.Cond != "" {
-		G.Printf(4, "doSync: condição %q, dom nodeType=%d tag=%s\n", ref.Cond, nodeType(dom), tagName(dom))
+		G.Logf(4, "doSync: condição %q, dom nodeType=%d tag=%s\n", ref.Cond, nodeType(dom), tagName(dom))
 		result := condSync(dom, ref, ctx, nil, state, syncDown)
-		G.Printf(4, "doSync: após condSync, result nodeType=%d\n", nodeType(result))
+		G.Logf(4, "doSync: após condSync, result nodeType=%d\n", nodeType(result))
 		return
 	}
 

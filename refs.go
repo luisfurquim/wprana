@@ -24,7 +24,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		data := model.Get("data").String()
 		segs, err := parseText(data)
 		if err != nil {
-			G.Printf(1, "getReferences: parseText erro no nó de texto: %v\n", err)
+			G.Logf(1, "getReferences: parseText erro no nó de texto: %v\n", err)
 			return nil
 		}
 		if !hasRef(segs) {
@@ -137,7 +137,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 
 		segs, err := parseText(curVal)
 		if err != nil {
-			G.Printf(1, "getReferences: parseText erro em attr %q: %v\n", attName, err)
+			G.Logf(1, "getReferences: parseText erro em attr %q: %v\n", attName, err)
 			continue
 		}
 		if !hasRef(segs) {
@@ -164,7 +164,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		condToks := tokenize(cond)
 		condTree, err := parseReference(&condToks)
 		if err != nil {
-			G.Printf(1, "getReferences: parseReference para cond %q: %v\n", cond, err)
+			G.Logf(1, "getReferences: parseReference para cond %q: %v\n", cond, err)
 		} else {
 			tree.CondTree = condTree
 		}
@@ -183,7 +183,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		arrToks := tokenize(arrayVar)
 		arrTree, err := parseReference(&arrToks)
 		if err != nil {
-			G.Printf(1, "getReferences: parseReference para arrayVar %q: %v\n", arrayVar, err)
+			G.Logf(1, "getReferences: parseReference para arrayVar %q: %v\n", arrayVar, err)
 		}
 
 		if noSpan {
@@ -268,7 +268,7 @@ func setupTwoWayBinding(dom js.Value, pureRef []RefNode, state *PranaState, ctxP
 			// garantindo que bool/int/float não sejam corrompidos para string.
 			typedVal := coerceToType(newVal, getField(container, key))
 			if setField(container, key, typedVal) {
-				G.Printf(4, "setupTwoWayBinding: atualizado %q = %q\n", key, newVal)
+				G.Logf(4, "setupTwoWayBinding: atualizado %q = %q\n", key, newVal)
 				if state != nil {
 					state.syncLocal(nil)
 				}

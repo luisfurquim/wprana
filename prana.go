@@ -18,7 +18,7 @@ import (
 //   observed  - nomes de atributos a serem observados (attributeChangedCallback)
 func Register(tagName, htmlContent, cssContent string, factory ModFactory, observed ...string) {
 	if _, exists := moduleRegistry[tagName]; exists {
-		G.Printf(1, "Register: módulo %q já registrado\n", tagName)
+		G.Logf(1, "Register: módulo %q já registrado\n", tagName)
 		return
 	}
 	moduleRegistry[tagName] = &modDef{
@@ -27,7 +27,7 @@ func Register(tagName, htmlContent, cssContent string, factory ModFactory, obser
 		css:      cssContent,
 		observed: observed,
 	}
-	G.Printf(2, "Register: módulo %q registrado\n", tagName)
+	G.Logf(2, "Register: módulo %q registrado\n", tagName)
 }
 
 // DefineAll define todos os custom elements registrados via Register().
@@ -46,7 +46,7 @@ func DefineAll() {
 func defineCustomElement(tagName string, def *modDef) {
 	pranaDef := jsGlobal.Get("_pranaDef")
 	if pranaDef.IsUndefined() || pranaDef.IsNull() {
-		G.Printf(1, "defineCustomElement: _pranaDef não encontrado no escopo global. "+
+		G.Logf(1, "defineCustomElement: _pranaDef não encontrado no escopo global. "+
 			"Inclua o helper prana_helper.js antes do WASM.\n")
 		return
 	}
@@ -97,7 +97,7 @@ func defineCustomElement(tagName string, def *modDef) {
 	})
 
 	pranaDef.Invoke(tagName, constructorFn, connectedFn, attrChangedFn, disconnectedFn, jsObserved)
-	G.Printf(2, "defineCustomElement: %q definido\n", tagName)
+	G.Logf(2, "defineCustomElement: %q definido\n", tagName)
 }
 
 // ── Ciclo de vida do elemento ─────────────────────────────────────────────────
@@ -106,7 +106,7 @@ func defineCustomElement(tagName string, def *modDef) {
 // Cria a shadow root, carrega HTML/CSS, inicializa o módulo e configura
 // o binding de dados.
 func elementConstructor(self js.Value, tagName string, def *modDef) {
-	G.Printf(3, "elementConstructor: %q\n", tagName)
+	G.Logf(3, "elementConstructor: %q\n", tagName)
 
 	// Cria shadow root
 	shadowRoot := self.Call("attachShadow", map[string]any{"mode": "open"})
@@ -175,7 +175,7 @@ func elementConstructor(self js.Value, tagName string, def *modDef) {
 // elementConnected é chamado quando o elemento é inserido no DOM.
 func elementConnected(self js.Value) {
 	self.Set("_pranaConnected", true)
-	G.Printf(4, "elementConnected: %s\n", self.Get("_pranaTag").String())
+	G.Logf(4, "elementConnected: %s\n", self.Get("_pranaTag").String())
 }
 
 // elementAttrChanged é chamado quando um atributo observado muda.
@@ -183,7 +183,7 @@ func elementAttrChanged(self js.Value, name, oldVal, newVal string) {
 	if oldVal == newVal {
 		return
 	}
-	G.Printf(4, "elementAttrChanged: %s attr=%q %q→%q\n",
+	G.Logf(4, "elementAttrChanged: %s attr=%q %q→%q\n",
 		self.Get("_pranaTag").String(), name, oldVal, newVal)
 
 	// Verifica se o novo valor é uma referência (não deve ser propagado)
@@ -218,7 +218,7 @@ func elementAttrChanged(self js.Value, name, oldVal, newVal string) {
 // elementDisconnected é chamado quando o elemento é removido do DOM.
 func elementDisconnected(self js.Value) {
 	tag := self.Get("_pranaTag").String()
-	G.Printf(3, "elementDisconnected: %s\n", tag)
+	G.Logf(3, "elementDisconnected: %s\n", tag)
 	nodeID, ok := getNodeID(self)
 	if !ok {
 		return
@@ -273,7 +273,7 @@ func waitAndRender(self js.Value, mod PranaMod, rd *ReactiveData, attrs [][2]str
 		Trigger: triggerFn,
 	}
 
-	G.Printf(3, "waitAndRender: chamando Render() para %s\n", self.Get("_pranaTag").String())
+	G.Logf(3, "waitAndRender: chamando Render() para %s\n", self.Get("_pranaTag").String())
 	mod.Render(pObj)
 }
 
@@ -290,14 +290,14 @@ func buildTrigger(self js.Value, rd *ReactiveData) func(eventName string, args .
 		// Sobe até encontrar o pRoot (parent prana element)
 		pRoot := findParentPranaElement(self)
 		if pRoot.IsNull() || pRoot.IsUndefined() {
-			G.Printf(3, "trigger: %q sem pRoot\n", eventName)
+			G.Logf(3, "trigger: %q sem pRoot\n", eventName)
 			return
 		}
 
 		attrName := "@" + eventName
 		handlerName := attrVal(self, attrName)
 		if handlerName == "" {
-			G.Printf(4, "trigger: atributo %q não definido em %s\n", attrName, self.Get("_pranaTag").String())
+			G.Logf(4, "trigger: atributo %q não definido em %s\n", attrName, self.Get("_pranaTag").String())
 			return
 		}
 
@@ -309,13 +309,13 @@ func buildTrigger(self js.Value, rd *ReactiveData) func(eventName string, args .
 		// Resolve o nome do handler no contexto do pai
 		handler := getField(pst.Data.M, handlerName)
 		if fn, ok := handler.(func(...any)); ok {
-			G.Printf(4, "trigger: chamando %q com %d args\n", handlerName, len(args))
+			G.Logf(4, "trigger: chamando %q com %d args\n", handlerName, len(args))
 			fn(args...)
 		} else if fn, ok := handler.(TriggerHandler); ok {
-			G.Printf(4, "trigger: chamando %q com %d args\n", handlerName, len(args))
+			G.Logf(4, "trigger: chamando %q com %d args\n", handlerName, len(args))
 			fn(args...)
 		} else {
-			G.Printf(1, "trigger: handler %q não é uma função\n", handlerName)
+			G.Logf(1, "trigger: handler %q não é uma função\n", handlerName)
 		}
 	}
 }
@@ -401,7 +401,7 @@ func (o *ObservedData) Delete(key string) {
 func Update(tagName string, cssContent string) {
 	def, exists := moduleRegistry[tagName]
 	if !exists {
-		G.Printf(1, "Update: módulo %q não encontrado\n", tagName)
+		G.Logf(1, "Update: módulo %q não encontrado\n", tagName)
 		return
 	}
 	def.css = cssContent
@@ -429,7 +429,7 @@ func Update(tagName string, cssContent string) {
 // Main deve ser chamado de main() para manter o WASM vivo e definir os
 // custom elements. Bloqueia indefinidamente.
 func Main() {
-	G.Printf(2, "wprana: iniciando, definindo %d módulos\n", len(moduleRegistry))
+	G.Logf(2, "wprana: iniciando, definindo %d módulos\n", len(moduleRegistry))
 	DefineAll()
 
 	// Mantém o WASM rodando

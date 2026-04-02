@@ -12,7 +12,7 @@ import (
 // Para objetos aninhados, passe map[string]any.
 func (r *ReactiveData) Set(key string, val any) {
 	r.M[key] = val
-	G.Printf(5, "ReactiveData.Set: %q\n", key)
+	G.Logf(5, "ReactiveData.Set: %q\n", key)
 	r.triggerSync(nil)
 }
 
@@ -24,7 +24,7 @@ func (r *ReactiveData) Get(key string) any {
 // Delete remove key e dispara sync.
 func (r *ReactiveData) Delete(key string) {
 	delete(r.M, key)
-	G.Printf(5, "ReactiveData.Delete: %q\n", key)
+	G.Logf(5, "ReactiveData.Delete: %q\n", key)
 	r.triggerSync(nil)
 }
 
@@ -36,7 +36,7 @@ func (r *ReactiveData) Append(key string, val any) {
 	} else {
 		r.M[key] = []any{val}
 	}
-	G.Printf(5, "ReactiveData.Append: %q\n", key)
+	G.Logf(5, "ReactiveData.Append: %q\n", key)
 	r.triggerSync(nil)
 }
 
@@ -45,7 +45,7 @@ func (r *ReactiveData) DeleteAt(key string, idx int) {
 	existing := r.M[key]
 	arr, ok := existing.([]any)
 	if !ok || idx < 0 || idx >= len(arr) {
-		G.Printf(1, "ReactiveData.DeleteAt: índice inválido %d para %q\n", idx, key)
+		G.Logf(1, "ReactiveData.DeleteAt: índice inválido %d para %q\n", idx, key)
 		return
 	}
 	target := arr
@@ -53,7 +53,7 @@ func (r *ReactiveData) DeleteAt(key string, idx int) {
 	copy(arr[idx:], arr[idx+1:])
 	arr[len(arr)-1] = nil // libera referência para GC
 	r.M[key] = arr[:len(arr)-1]
-	G.Printf(5, "ReactiveData.DeleteAt: %q[%d]\n", key, idx)
+	G.Logf(5, "ReactiveData.DeleteAt: %q[%d]\n", key, idx)
 	r.triggerSync(&Change{Delete: &DeleteInfo{Target: target, Index: idx}})
 }
 
@@ -62,7 +62,7 @@ func (r *ReactiveData) SetAt(key string, idx int, val any) {
 	existing := r.M[key]
 	arr, ok := existing.([]any)
 	if !ok {
-		G.Printf(1, "ReactiveData.SetAt: %q não é []any\n", key)
+		G.Logf(1, "ReactiveData.SetAt: %q não é []any\n", key)
 		return
 	}
 	// Expande se necessário (replica comportamento do proxy JS)
@@ -71,7 +71,7 @@ func (r *ReactiveData) SetAt(key string, idx int, val any) {
 	}
 	arr[idx] = val
 	r.M[key] = arr
-	G.Printf(5, "ReactiveData.SetAt: %q[%d]\n", key, idx)
+	G.Logf(5, "ReactiveData.SetAt: %q[%d]\n", key, idx)
 	r.triggerSync(nil)
 }
 
@@ -150,7 +150,7 @@ func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]s
 	// Sync inicial e inserção no DOM dentro de syncDepth, para que
 	// elementAttrChanged disparado pelo browser durante appendChild
 	// não inicie uma nova época (é parte desta mesma cadeia de propagação).
-	G.Printf(4, "bindElement: sync inicial\n")
+	G.Logf(4, "bindElement: sync inicial\n")
 	syncDepth++
 	state.syncLocal(nil)
 	dom.Call("appendChild", model)
@@ -177,7 +177,7 @@ func setupTwoWayBindingsInTree(dom js.Value, ref *DOMRefNode, state *PranaState)
 				ctxPtr := &Ctx{}
 				twb := setupTwoWayBinding(dom, ab.PureRef, state, ctxPtr)
 				st.TwoWay[attrName] = twb
-				G.Printf(4, "setupTwoWayBindingsInTree: two-way binding em %q\n", attrName)
+				G.Logf(4, "setupTwoWayBindingsInTree: two-way binding em %q\n", attrName)
 			}
 		}
 
