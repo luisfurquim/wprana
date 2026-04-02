@@ -68,6 +68,8 @@ type DOMRefNode struct {
 	ModelRef *DOMRefNode             // ref do template filho para ** (noSpan)
 	Cond     string                  // expressão condicional (vazio se nenhum)
 	CondTree []RefNode               // árvore parseada da condição
+	CondOp   string                  // operador condicional: "" = truthy, "eq" = igualdade, "neq" = desigualdade
+	CondVal  string                  // valor literal para comparação (usado com CondOp "eq" ou "neq")
 }
 
 // ── Estado reativo ────────────────────────────────────────────────────────────

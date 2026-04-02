@@ -3,6 +3,7 @@
 package wprana
 
 import (
+	"fmt"
 	"syscall/js"
 )
 
@@ -114,9 +115,17 @@ func condSync(dom js.Value, ref *DOMRefNode, ctx Ctx, index any, state *PranaSta
 		res = fn(index)
 	}
 
-	// Avalia truthiness (equivale ao truthy do JS)
-	cond := isTruthy(res)
-	G.Printf(4, "condSync: cond=%q res=%v (type %T) truthy=%v\n", ref.Cond, res, res, cond)
+	// Avalia a condição conforme o operador
+	var cond bool
+	switch ref.CondOp {
+	case "eq":
+		cond = fmt.Sprintf("%v", res) == ref.CondVal
+	case "neq":
+		cond = fmt.Sprintf("%v", res) != ref.CondVal
+	default:
+		cond = isTruthy(res)
+	}
+	G.Printf(4, "condSync: cond=%q op=%q val=%q res=%v (type %T) result=%v\n", ref.Cond, ref.CondOp, ref.CondVal, res, res, cond)
 
 	if cond {
 		// Deve estar visível

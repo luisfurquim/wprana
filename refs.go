@@ -51,7 +51,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 
 	var arrayVar, arrayIdx string
 	var noSpan bool
-	var cond string
+	var cond, condOp, condVal string
 
 	// Coleta atributos num slice para poder remover durante iteração sem
 	// invalidar índices (o DOM muda quando removemos attrs).
@@ -87,8 +87,28 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		}
 
 		// ── Atributo condicional: ? ──────────────────────────────────────
+		// Formas suportadas:
+		//   ?cond          → truthy (booleano)
+		//   ?cond="val"    → igualdade (cond == "val")
+		//   ?cond!="val"   → desigualdade (cond != "val")
 		if strings.HasPrefix(name, "?") {
-			cond = name[1:]
+			condName := name[1:]
+			if strings.HasSuffix(condName, "!") && value != "" {
+				// ?cond!="val" → o browser entrega name="?cond!" value="val"
+				cond = condName[:len(condName)-1]
+				condOp = "neq"
+				condVal = value
+			} else if value != "" {
+				// ?cond="val" → o browser entrega name="?cond" value="val"
+				cond = condName
+				condOp = "eq"
+				condVal = value
+			} else {
+				// ?cond → booleano (truthiness)
+				cond = condName
+				condOp = ""
+				condVal = ""
+			}
 			model.Call("removeAttribute", name)
 			found = true
 			continue
@@ -139,6 +159,8 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 	// ── Configura condicional ─────────────────────────────────────────────────
 	if cond != "" {
 		tree.Cond = cond
+		tree.CondOp = condOp
+		tree.CondVal = condVal
 		condToks := tokenize(cond)
 		condTree, err := parseReference(&condToks)
 		if err != nil {

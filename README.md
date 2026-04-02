@@ -13,6 +13,9 @@ WebAssembly in the browser.
 - [Template Syntax](#template-syntax)
   - [Expression Binding](#expression-binding)
   - [Conditional Rendering](#conditional-rendering)
+    - [Boolean (truthiness)](#boolean-truthiness)
+    - [Equality](#equality-varvalue)
+    - [Inequality](#inequality-varvalue)
   - [Array Iteration](#array-iteration)
   - [Two-Way Binding](#two-way-binding)
   - [Events (Child to Parent)](#events-child-to-parent)
@@ -215,6 +218,9 @@ updated when the data changes.
 ### Conditional Rendering
 
 Use the `?` prefix on an attribute to conditionally show or hide an element.
+Three forms are supported:
+
+#### Boolean (truthiness)
 
 ```html
 <!-- Shows only when show_details is truthy -->
@@ -228,12 +234,66 @@ Use the `?` prefix on an attribute to conditionally show or hide an element.
 </div>
 ```
 
-When the condition is falsy, the element is replaced by a comment node. When it
-becomes truthy again, the original element is restored.
+#### Equality (`?var="value"`)
 
-**Truthiness rules** (same as JavaScript):
+Shows the element only when the variable's string representation equals the
+given value:
+
+```html
+<!-- Shows only when user_type is "A" (Author) -->
+<div ?user_type="A">
+    <p>Author-specific content</p>
+</div>
+
+<!-- Shows only when status is "active" -->
+<span ?status="active" class="badge">Active</span>
+```
+
+#### Inequality (`?var!="value"`)
+
+Shows the element only when the variable's string representation does **not**
+equal the given value:
+
+```html
+<!-- Shows for any user_type except "R" (Reader) -->
+<div ?user_type!="R">
+    <p>Extra profile fields</p>
+</div>
+
+<!-- Hides when status is "deleted" -->
+<div ?status!="deleted">
+    <p>This record is visible</p>
+</div>
+```
+
+#### How operators map to HTML attributes
+
+The browser parses these forms naturally — no special escaping is needed:
+
+| Template syntax | HTML attr name | HTML attr value | Operator |
+|---|---|---|---|
+| `?cond` | `?cond` | *(empty)* | truthy |
+| `?cond="abc"` | `?cond` | `abc` | equality |
+| `?cond!="abc"` | `?cond!` | `abc` | inequality |
+
+> **Note:** Comparison operators `<` and `>` are not supported because they
+> conflict with HTML tag syntax.
+
+#### Behavior
+
+When the condition is falsy (or the comparison fails), the element is replaced
+by a comment node. When the condition becomes truthy (or the comparison
+succeeds), the original element is restored.
+
+**Truthiness rules** (for the boolean form, same as JavaScript):
 - Falsy: `nil`, `false`, `0`, `""`, empty `[]any{}`
 - Truthy: everything else
+
+**Comparison rules** (for equality/inequality forms):
+- The variable value is converted to its string representation via
+  `fmt.Sprintf("%v", value)` before comparing with the attribute value.
+- This means numeric values work as expected: `?count="0"` matches when
+  count is `0` (int) or `"0"` (string).
 
 ### Array Iteration
 
@@ -897,7 +957,9 @@ data map → calls the function.
 
 HTML attribute names are always converted to lowercase by the browser. This means
 template variables used in attributes (`?condition`, `&attr`, `@event`) must use
-**lowercase names only**. Use snake_case for multi-word identifiers:
+**lowercase names only**. Use snake_case for multi-word identifiers.
+The `!` suffix used for inequality (`?var!="val"`) is preserved by the browser
+since only letters are lowercased:
 
 ```go
 // CORRECT
@@ -996,6 +1058,7 @@ func (w *MyWidget) InitData() map[string]any {
         "show_extra": false,
         "extra":      "",
         "input_val":  "",
+        "mode":       "edit",
     }
 }
 
@@ -1042,14 +1105,23 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
       <li *items:i>{{items[i].label}}</li>
    </ul>
 
+   <!-- Boolean conditional -->
    <div ?show_extra>
       <p>Extra: {{extra}}</p>
    </div>
 
-   <form>
-      <input &value="{{input_val}}" type="text" placeholder="Add item..." />
-      <input type="submit" value="Add" />
-   </form>
+   <!-- Equality conditional: only when mode is "edit" -->
+   <div ?mode="edit">
+      <p>You are in edit mode</p>
+   </div>
+
+   <!-- Inequality conditional: hidden when mode is "readonly" -->
+   <div ?mode!="readonly">
+      <form>
+         <input &value="{{input_val}}" type="text" placeholder="Add item..." />
+         <input type="submit" value="Add" />
+      </form>
+   </div>
 </div>
 ```
 
