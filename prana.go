@@ -6,19 +6,19 @@ import (
 	"syscall/js"
 )
 
-// ── Registro de módulos ───────────────────────────────────────────────────────
+// ── Module registration ─────────────────────────────────────────────────────
 
-// Register registra um web component Go para ser definido como custom element.
-// Deve ser chamado de dentro de func init() no pacote do módulo.
+// Register registers a Go web component to be defined as a custom element.
+// Must be called from within func init() in the module's package.
 //
-//   tagName   - nome do custom element (e.g. "my-widget")
-//   htmlContent - conteúdo HTML do template (geralmente via //go:embed)
-//   cssContent  - conteúdo CSS do componente (geralmente via //go:embed)
-//   factory   - função que cria uma nova instância de PranaMod
-//   observed  - nomes de atributos a serem observados (attributeChangedCallback)
+//	tagName     - name of the custom element (e.g. "my-widget")
+//	htmlContent - HTML content of the template (usually via //go:embed)
+//	cssContent  - CSS content of the component (usually via //go:embed)
+//	factory     - function that creates a new instance of PranaMod
+//	observed    - names of attributes to be observed (attributeChangedCallback)
 func Register(tagName, htmlContent, cssContent string, factory ModFactory, observed ...string) {
 	if _, exists := moduleRegistry[tagName]; exists {
-		G.Logf(1, "Register: módulo %q já registrado\n", tagName)
+		G.Logf(1, "Register: module %q already registered\n", tagName)
 		return
 	}
 	moduleRegistry[tagName] = &modDef{
@@ -27,31 +27,31 @@ func Register(tagName, htmlContent, cssContent string, factory ModFactory, obser
 		css:      cssContent,
 		observed: observed,
 	}
-	G.Logf(2, "Register: módulo %q registrado\n", tagName)
+	G.Logf(2, "Register: module %q registered\n", tagName)
 }
 
-// DefineAll define todos os custom elements registrados via Register().
-// Deve ser chamado uma vez no main() após todos os módulos terem sido importados.
+// DefineAll defines all custom elements registered via Register().
+// Must be called once in main() after all modules have been imported.
 func DefineAll() {
 	for tagName, def := range moduleRegistry {
 		defineCustomElement(tagName, def)
 	}
 }
 
-// ── Definição do custom element ───────────────────────────────────────────────
+// ── Custom element definition ───────────────────────────────────────────────
 
-// defineCustomElement usa o helper JS _pranaDef para registrar o custom element.
-// Toda a lógica de ciclo de vida é implementada em Go; o JS apenas encaminha
-// as chamadas de constructor/connectedCallback/attributeChangedCallback.
+// defineCustomElement uses the JS helper _pranaDef to register the custom element.
+// All lifecycle logic is implemented in Go; the JS only forwards
+// the constructor/connectedCallback/attributeChangedCallback calls.
 func defineCustomElement(tagName string, def *modDef) {
 	pranaDef := jsGlobal.Get("_pranaDef")
 	if pranaDef.IsUndefined() || pranaDef.IsNull() {
-		G.Logf(1, "defineCustomElement: _pranaDef não encontrado no escopo global. "+
-			"Inclua o helper prana_helper.js antes do WASM.\n")
+		G.Logf(1, "defineCustomElement: _pranaDef not found in global scope. "+
+			"Include the prana_helper.js helper before the WASM.\n")
 		return
 	}
 
-	// Converte observed para JS array
+	// Converts observed to JS array
 	jsObserved := jsGlobal.Get("Array").New()
 	for i, attr := range def.observed {
 		jsObserved.SetIndex(i, attr)
@@ -97,37 +97,37 @@ func defineCustomElement(tagName string, def *modDef) {
 	})
 
 	pranaDef.Invoke(tagName, constructorFn, connectedFn, attrChangedFn, disconnectedFn, jsObserved)
-	G.Logf(2, "defineCustomElement: %q definido\n", tagName)
+	G.Logf(2, "defineCustomElement: %q defined\n", tagName)
 }
 
-// ── Ciclo de vida do elemento ─────────────────────────────────────────────────
+// ── Element lifecycle ───────────────────────────────────────────────────────
 
-// elementConstructor é chamado quando o custom element é instanciado.
-// Cria a shadow root, carrega HTML/CSS, inicializa o módulo e configura
-// o binding de dados.
+// elementConstructor is called when the custom element is instantiated.
+// Creates the shadow root, loads HTML/CSS, initializes the module, and sets up
+// the data binding.
 func elementConstructor(self js.Value, tagName string, def *modDef) {
 	G.Logf(3, "elementConstructor: %q\n", tagName)
 
-	// Cria shadow root
+	// Creates shadow root
 	shadowRoot := self.Call("attachShadow", map[string]any{"mode": "open"})
 
-	// Injeta CSS
+	// Injects CSS
 	if def.css != "" {
 		cssNode := domCreateStyleNode(def.css)
 		shadowRoot.Call("appendChild", cssNode)
 	}
 
-	// Container span na shadow root
+	// Container span in the shadow root
 	container := domCreateElement("SPAN")
 	shadowRoot.Call("appendChild", container)
 
-	// Parseia o template HTML
+	// Parses the HTML template
 	tmpl := domCreateTemplate(def.html)
 	content := tmpl.Get("content").Call("cloneNode", true)
 
-	// Se o template tem um único elemento filho, usa-o diretamente.
-	// Caso contrário, envolve todos os childNodes num <span> wrapper
-	// para que bindElement receba sempre um único nó raiz.
+	// If the template has a single child element, use it directly.
+	// Otherwise, wrap all childNodes in a <span> wrapper
+	// so that bindElement always receives a single root node.
 	var htmlRoot js.Value
 	children := content.Get("children")
 	if children.Get("length").Int() == 1 && content.Get("childNodes").Get("length").Int() == 1 {
@@ -139,7 +139,7 @@ func elementConstructor(self js.Value, tagName string, def *modDef) {
 		}
 	}
 
-	// Lê atributos do elemento para dados iniciais
+	// Reads element attributes for initial data
 	var attrs [][2]string
 	nAttrs := attrLen(self)
 	for i := 0; i < nAttrs; i++ {
@@ -147,38 +147,38 @@ func elementConstructor(self js.Value, tagName string, def *modDef) {
 		attrs = append(attrs, [2]string{n, v})
 	}
 
-	// Instancia o módulo
+	// Instantiates the module
 	mod := def.factory()
 	data := mod.InitData()
 	if data == nil {
 		data = map[string]any{}
 	}
 
-	// Vincula dados ao DOM
+	// Binds data to the DOM
 	rd := bindElement(data, container, htmlRoot, attrs)
 
-	// Guarda referência ao estado no registro do nó
+	// Stores a reference to the state in the node registry
 	nodeID, st := getOrCreateState(self)
 	st.State = rd.state
 
-	// Marca o elemento com seu modName para debug
+	// Marks the element with its modName for debug
 	self.Set("_pranaTag", tagName)
 	self.Set("_pranaNodeId", nodeID)
 
-	// Rastreia a instância para Update() poder atualizar o CSS
+	// Tracks the instance so Update() can update the CSS
 	instanceRegistry[tagName] = append(instanceRegistry[tagName], self)
 
-	// Lança goroutine que aguarda conexão e então chama Render
+	// Launches goroutine that waits for connection and then calls Render
 	go waitAndRender(self, mod, rd, attrs)
 }
 
-// elementConnected é chamado quando o elemento é inserido no DOM.
+// elementConnected is called when the element is inserted into the DOM.
 func elementConnected(self js.Value) {
 	self.Set("_pranaConnected", true)
 	G.Logf(4, "elementConnected: %s\n", self.Get("_pranaTag").String())
 }
 
-// elementAttrChanged é chamado quando um atributo observado muda.
+// elementAttrChanged is called when an observed attribute changes.
 func elementAttrChanged(self js.Value, name, oldVal, newVal string) {
 	if oldVal == newVal {
 		return
@@ -186,36 +186,36 @@ func elementAttrChanged(self js.Value, name, oldVal, newVal string) {
 	G.Logf(4, "elementAttrChanged: %s attr=%q %q→%q\n",
 		self.Get("_pranaTag").String(), name, oldVal, newVal)
 
-	// Verifica se o novo valor é uma referência (não deve ser propagado)
+	// Checks if the new value is a reference (should not be propagated)
 	segs, err := parseText(newVal)
 	if err != nil {
 		return
 	}
 	for i := range segs {
 		if segs[i].IsRef {
-			return // valor ainda é um template, não propaga
+			return // value is still a template, do not propagate
 		}
 	}
 
-	// Propaga para o mapa de dados e dispara sync local.
+	// Propagates to the data map and triggers local sync.
 	st := getState(self)
 	if st == nil || st.State == nil {
 		return
 	}
 	st.State.Data.M[name] = coerceToType(newVal, st.State.Data.M[name])
 
-	// Se estamos FORA de uma cadeia de sync (syncDepth==0), é uma mudança
-	// externa (e.g. JavaScript do usuário). Inicia nova época para que o
-	// syncLocal prossiga mesmo que o componente já tenha sido sincronizado.
-	// Se estamos DENTRO de uma cadeia (syncDepth>0), usa a época corrente:
-	// o syncLocal será ignorado se o componente já foi sincronizado nesta época.
+	// If we are OUTSIDE a sync chain (syncDepth==0), it is an external change
+	// (e.g. user JavaScript). Start a new epoch so that syncLocal proceeds
+	// even if the component has already been synced.
+	// If we are INSIDE a chain (syncDepth>0), use the current epoch:
+	// syncLocal will be skipped if the component has already been synced in this epoch.
 	if syncDepth == 0 {
 		syncEpoch++
 	}
 	st.State.syncLocal(nil)
 }
 
-// elementDisconnected é chamado quando o elemento é removido do DOM.
+// elementDisconnected is called when the element is removed from the DOM.
 func elementDisconnected(self js.Value) {
 	tag := self.Get("_pranaTag").String()
 	G.Logf(3, "elementDisconnected: %s\n", tag)
@@ -226,7 +226,7 @@ func elementDisconnected(self js.Value) {
 	releaseTwoWayBindings(nodeID)
 	delete(nodeRegistry, nodeID)
 
-	// Remove da lista de instâncias vivas
+	// Removes from the list of live instances
 	instances := instanceRegistry[tag]
 	for i, inst := range instances {
 		if inst.Equal(self) {
@@ -236,17 +236,17 @@ func elementDisconnected(self js.Value) {
 	}
 }
 
-// ── Espera por conexão e chama Render ─────────────────────────────────────────
+// ── Wait for connection and call Render ─────────────────────────────────────
 
-// waitAndRender aguarda que o elemento seja conectado ao DOM e então
-// chama Render(). Equivale ao polling com setTimeout(10) do JS original.
+// waitAndRender waits for the element to be connected to the DOM and then
+// calls Render(). Equivalent to the polling with setTimeout(10) from the original JS.
 func waitAndRender(self js.Value, mod PranaMod, rd *ReactiveData, attrs [][2]string) {
-	// Poll até connected=true (equivale ao self.ready com setTimeout(10) do JS)
+	// Poll until connected=true (equivalent to self.ready with setTimeout(10) from JS)
 	for {
 		if isConnected(self) {
 			break
 		}
-		// Aguarda um tick JS liberando o scheduler
+		// Waits for a JS tick by releasing the scheduler
 		done := make(chan struct{})
 		jsGlobal.Call("setTimeout", js.FuncOf(func(this js.Value, args []js.Value) any {
 			close(done)
@@ -255,7 +255,7 @@ func waitAndRender(self js.Value, mod PranaMod, rd *ReactiveData, attrs [][2]str
 		<-done
 	}
 
-	// Aguarda mais 100ms para sincronização completa (equivale ao setTimeout(100) do JS)
+	// Waits another 100ms for complete synchronization (equivalent to setTimeout(100) from JS)
 	done := make(chan struct{})
 	jsGlobal.Call("setTimeout", js.FuncOf(func(this js.Value, args []js.Value) any {
 		close(done)
@@ -263,7 +263,7 @@ func waitAndRender(self js.Value, mod PranaMod, rd *ReactiveData, attrs [][2]str
 	}), 100)
 	<-done
 
-	// Configura a função trigger para o módulo
+	// Sets up the trigger function for the module
 	triggerFn := buildTrigger(self, rd)
 
 	pObj := &PranaObj{
@@ -273,31 +273,31 @@ func waitAndRender(self js.Value, mod PranaMod, rd *ReactiveData, attrs [][2]str
 		Trigger: triggerFn,
 	}
 
-	G.Logf(3, "waitAndRender: chamando Render() para %s\n", self.Get("_pranaTag").String())
+	G.Logf(3, "waitAndRender: calling Render() for %s\n", self.Get("_pranaTag").String())
 	mod.Render(pObj)
 }
 
-// isConnected verifica se o elemento está conectado ao DOM.
+// isConnected checks if the element is connected to the DOM.
 func isConnected(self js.Value) bool {
 	v := self.Get("_pranaConnected")
 	return !v.IsUndefined() && v.Bool()
 }
 
-// buildTrigger cria a função trigger que dispara eventos de um módulo filho
-// para o módulo pai via atributos @eventName.
+// buildTrigger creates the trigger function that fires events from a child module
+// to the parent module via @eventName attributes.
 func buildTrigger(self js.Value, rd *ReactiveData) func(eventName string, args ...any) {
 	return func(eventName string, args ...any) {
-		// Sobe até encontrar o pRoot (parent prana element)
+		// Goes up to find the pRoot (parent prana element)
 		pRoot := findParentPranaElement(self)
 		if pRoot.IsNull() || pRoot.IsUndefined() {
-			G.Logf(3, "trigger: %q sem pRoot\n", eventName)
+			G.Logf(3, "trigger: %q without pRoot\n", eventName)
 			return
 		}
 
 		attrName := "@" + eventName
 		handlerName := attrVal(self, attrName)
 		if handlerName == "" {
-			G.Logf(4, "trigger: atributo %q não definido em %s\n", attrName, self.Get("_pranaTag").String())
+			G.Logf(4, "trigger: attribute %q not defined on %s\n", attrName, self.Get("_pranaTag").String())
 			return
 		}
 
@@ -306,27 +306,27 @@ func buildTrigger(self js.Value, rd *ReactiveData) func(eventName string, args .
 			return
 		}
 
-		// Resolve o nome do handler no contexto do pai
+		// Resolves the handler name in the parent's context
 		handler := getField(pst.Data.M, handlerName)
 		if fn, ok := handler.(func(...any)); ok {
-			G.Logf(4, "trigger: chamando %q com %d args\n", handlerName, len(args))
+			G.Logf(4, "trigger: calling %q with %d args\n", handlerName, len(args))
 			fn(args...)
 		} else if fn, ok := handler.(TriggerHandler); ok {
-			G.Logf(4, "trigger: chamando %q com %d args\n", handlerName, len(args))
+			G.Logf(4, "trigger: calling %q with %d args\n", handlerName, len(args))
 			fn(args...)
 		} else {
-			G.Logf(1, "trigger: handler %q não é uma função\n", handlerName)
+			G.Logf(1, "trigger: handler %q is not a function\n", handlerName)
 		}
 	}
 }
 
-// ── Helpers de navegação prana ────────────────────────────────────────────────
+// ── Prana navigation helpers ────────────────────────────────────────────────
 
-// findParentPranaElement busca o ancestral mais próximo que seja um prana element.
+// findParentPranaElement searches for the closest ancestor that is a prana element.
 func findParentPranaElement(self js.Value) js.Value {
 	cur := self.Get("parentNode")
 	for !cur.IsNull() && !cur.IsUndefined() {
-		// Verifica se é host de shadow (atravessa shadow boundaries)
+		// Checks if it is a shadow host (traverses shadow boundaries)
 		host := cur.Get("host")
 		if !host.IsUndefined() && !host.IsNull() {
 			cur = host
@@ -339,7 +339,7 @@ func findParentPranaElement(self js.Value) js.Value {
 	return js.Null()
 }
 
-// getPranaState retorna o PranaState de um elemento prana pelo seu nodeID.
+// getPranaState returns the PranaState of a prana element by its nodeID.
 func getPranaState(el js.Value) *PranaState {
 	st := getState(el)
 	if st == nil {
@@ -348,12 +348,12 @@ func getPranaState(el js.Value) *PranaState {
 	return st.State
 }
 
-// ── onChange: observador externo ──────────────────────────────────────────────
+// ── onChange: external observer ──────────────────────────────────────────────
 
-// OnChange cria um observador externo sobre um mapa de dados.
-// O callback fn é chamado com ("S"=set/"D"=delete, target, property, value).
-// Equivale ao prana.onChange() do JS original.
-// Retorna um *ObservedData que encapsula os dados com notificação.
+// OnChange creates an external observer on a data map.
+// The callback fn is called with ("S"=set/"D"=delete, target, property, value).
+// Equivalent to the prana.onChange() from the original JS.
+// Returns an *ObservedData that encapsulates the data with notification.
 type ObservedData struct {
 	M  map[string]any
 	fn func(op string, target map[string]any, property string, value any)
@@ -393,20 +393,20 @@ func (o *ObservedData) Delete(key string) {
 	}
 }
 
-// ── Atualização dinâmica de CSS ───────────────────────────────────────────────
+// ── Dynamic CSS update ──────────────────────────────────────────────────────
 
-// Update substitui o CSS de um custom element já registrado e atualiza
-// o <style> no Shadow DOM de todas as instâncias vivas.
-// Deve ser chamado por módulos Customizable quando ReplaceCSS é invocado.
+// Update replaces the CSS of an already registered custom element and updates
+// the <style> in the Shadow DOM of all live instances.
+// Must be called by Customizable modules when ReplaceCSS is invoked.
 func Update(tagName string, cssContent string) {
 	def, exists := moduleRegistry[tagName]
 	if !exists {
-		G.Logf(1, "Update: módulo %q não encontrado\n", tagName)
+		G.Logf(1, "Update: module %q not found\n", tagName)
 		return
 	}
 	def.css = cssContent
 
-	// Atualiza o <style> de todas as instâncias vivas
+	// Updates the <style> of all live instances
 	for _, self := range instanceRegistry[tagName] {
 		shadowRoot := self.Get("shadowRoot")
 		if shadowRoot.IsNull() || shadowRoot.IsUndefined() {
@@ -414,8 +414,8 @@ func Update(tagName string, cssContent string) {
 		}
 		styleNode := shadowRoot.Call("querySelector", "style")
 		if styleNode.IsNull() || styleNode.IsUndefined() {
-			// Instância sem <style> (css era vazio no Register original);
-			// cria um novo <style> como primeiro filho.
+			// Instance without <style> (css was empty in the original Register);
+			// creates a new <style> as the first child.
 			styleNode = domCreateStyleNode(cssContent)
 			shadowRoot.Call("insertBefore", styleNode, shadowRoot.Get("firstChild"))
 			continue
@@ -424,14 +424,14 @@ func Update(tagName string, cssContent string) {
 	}
 }
 
-// ── main ──────────────────────────────────────────────────────────────────────
+// ── main ────────────────────────────────────────────────────────────────────
 
-// Main deve ser chamado de main() para manter o WASM vivo e definir os
-// custom elements. Bloqueia indefinidamente.
+// Main must be called from main() to keep the WASM alive and define the
+// custom elements. Blocks indefinitely.
 func Main() {
-	G.Logf(2, "wprana: iniciando, definindo %d módulos\n", len(moduleRegistry))
+	G.Logf(2, "wprana: starting, defining %d modules\n", len(moduleRegistry))
 	DefineAll()
 
-	// Mantém o WASM rodando
+	// Keeps the WASM running
 	select {}
 }

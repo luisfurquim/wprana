@@ -89,6 +89,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		// ── Atributo condicional: ? ──────────────────────────────────────
 		// Formas suportadas:
 		//   ?cond          → truthy (booleano)
+		//   ?!cond         → not (truthy (booleano))
 		//   ?cond="val"    → igualdade (cond == "val")
 		//   ?cond!="val"   → desigualdade (cond != "val")
 		if strings.HasPrefix(name, "?") {
@@ -103,6 +104,15 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 				cond = condName
 				condOp = "eq"
 				condVal = value
+			} else if strings.HasPrefix(condName, "!") {
+				// Não aceita ?!, precisa de um identificador de pelo menos 1 caractere
+				if len(condName) <= 1 {
+					return nil
+				}
+				// ?cond → booleano (!truthiness)
+				cond = condName[1:]
+				condOp = "!"
+				condVal = ""
 			} else {
 				// ?cond → booleano (truthiness)
 				cond = condName

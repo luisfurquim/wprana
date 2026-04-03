@@ -185,7 +185,12 @@ func solve(tree []RefNode, ctx any, fullCtx Ctx) any {
 		case TokNum:
 			sym = tree[i].IntVal
 		case TokIdent:
-			sym = getField(sym, tree[i].StrVal)
+			if tree[i].StrVal == "#" && i == 0 {
+				// Built-in: {{#}} resolves to the current URL hash fragment
+				sym = hashFragment
+			} else {
+				sym = getField(sym, tree[i].StrVal)
+			}
 		case TokExpr:
 			// Resolve a sub-expressão contra a pilha completa de contextos,
 			// não apenas contra a camada atual. Isso permite que índices de

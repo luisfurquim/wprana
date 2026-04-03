@@ -4,13 +4,13 @@ package wprana
 
 import "syscall/js"
 
-// JSGlobal retorna js.Global() para uso nos subpacotes e módulos.
+// JSGlobal returns js.Global() for use in subpackages and modules.
 func JSGlobal() js.Value {
 	return jsGlobal
 }
 
-// JSFuncOnce cria um js.Func que se auto-libera após ser chamado uma vez.
-// Útil para callbacks de setTimeout/setInterval sem vazamento de memória.
+// JSFuncOnce creates a js.Func that auto-releases after being called once.
+// Useful for setTimeout/setInterval callbacks without memory leaks.
 func JSFuncOnce(fn func()) js.Func {
 	var f js.Func
 	f = js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -21,8 +21,8 @@ func JSFuncOnce(fn func()) js.Func {
 	return f
 }
 
-// JSFunc cria um js.Func que permanece ativo até ser liberado manualmente.
-// O chamador é responsável por chamar Release() quando não precisar mais.
+// JSFunc creates a js.Func that remains active until manually released.
+// The caller is responsible for calling Release() when no longer needed.
 func JSFunc(fn func(this js.Value, args []js.Value) any) js.Func {
 	return js.FuncOf(fn)
 }

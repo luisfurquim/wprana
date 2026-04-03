@@ -8,27 +8,27 @@ import (
 
 // ── ReactiveData ──────────────────────────────────────────────────────────────
 
-// Set define o valor de key e dispara sync.
-// Para objetos aninhados, passe map[string]any.
+// Set sets the value of key and triggers sync.
+// For nested objects, pass map[string]any.
 func (r *ReactiveData) Set(key string, val any) {
 	r.M[key] = val
 	G.Logf(5, "ReactiveData.Set: %q\n", key)
 	r.triggerSync(nil)
 }
 
-// Get retorna o valor de key.
+// Get returns the value of key.
 func (r *ReactiveData) Get(key string) any {
 	return r.M[key]
 }
 
-// Delete remove key e dispara sync.
+// Delete removes key and triggers sync.
 func (r *ReactiveData) Delete(key string) {
 	delete(r.M, key)
 	G.Logf(5, "ReactiveData.Delete: %q\n", key)
 	r.triggerSync(nil)
 }
 
-// Append adiciona um elemento ao array em key e dispara sync.
+// Append adds an element to the array at key and triggers sync.
 func (r *ReactiveData) Append(key string, val any) {
 	existing := r.M[key]
 	if arr, ok := existing.([]any); ok {
@@ -40,32 +40,32 @@ func (r *ReactiveData) Append(key string, val any) {
 	r.triggerSync(nil)
 }
 
-// DeleteAt remove o elemento de índice idx do array em key e dispara sync.
+// DeleteAt removes the element at index idx from the array at key and triggers sync.
 func (r *ReactiveData) DeleteAt(key string, idx int) {
 	existing := r.M[key]
 	arr, ok := existing.([]any)
 	if !ok || idx < 0 || idx >= len(arr) {
-		G.Logf(1, "ReactiveData.DeleteAt: índice inválido %d para %q\n", idx, key)
+		G.Logf(1, "ReactiveData.DeleteAt: invalid index %d for %q\n", idx, key)
 		return
 	}
 	target := arr
-	// Remove sem copiar o slice inteiro: reutiliza a memória
+	// Remove without copying the entire slice: reuses the memory
 	copy(arr[idx:], arr[idx+1:])
-	arr[len(arr)-1] = nil // libera referência para GC
+	arr[len(arr)-1] = nil // releases reference for GC
 	r.M[key] = arr[:len(arr)-1]
 	G.Logf(5, "ReactiveData.DeleteAt: %q[%d]\n", key, idx)
 	r.triggerSync(&Change{Delete: &DeleteInfo{Target: target, Index: idx}})
 }
 
-// SetAt define o elemento de índice idx do array em key e dispara sync.
+// SetAt sets the element at index idx of the array at key and triggers sync.
 func (r *ReactiveData) SetAt(key string, idx int, val any) {
 	existing := r.M[key]
 	arr, ok := existing.([]any)
 	if !ok {
-		G.Logf(1, "ReactiveData.SetAt: %q não é []any\n", key)
+		G.Logf(1, "ReactiveData.SetAt: %q is not []any\n", key)
 		return
 	}
-	// Expande se necessário (replica comportamento do proxy JS)
+	// Expands if necessary (replicates JS proxy behavior)
 	for len(arr) <= idx {
 		arr = append(arr, nil)
 	}
@@ -75,15 +75,15 @@ func (r *ReactiveData) SetAt(key string, idx int, val any) {
 	r.triggerSync(nil)
 }
 
-// Sync dispara manualmente uma re-sincronização do DOM sem nenhuma alteração
-// de dados específica. Útil após mutações diretas em r.M.
+// Sync manually triggers a DOM re-synchronization without any specific
+// data change. Useful after direct mutations to r.M.
 func (r *ReactiveData) Sync() {
 	r.triggerSync(nil)
 }
 
-// triggerSync inicia uma nova cadeia de propagação.
-// Incrementa a época global para que componentes já sincronizados nesta
-// cadeia sejam ignorados, quebrando ciclos de propagação circular.
+// triggerSync starts a new propagation chain.
+// Increments the global epoch so that components already synced in this
+// chain are skipped, breaking circular propagation cycles.
 func (r *ReactiveData) triggerSync(ch *Change) {
 	if r.state != nil {
 		syncEpoch++
@@ -95,15 +95,15 @@ func (r *ReactiveData) triggerSync(ch *Change) {
 
 // ── PranaState ────────────────────────────────────────────────────────────────
 
-// syncLocal sincroniza o DOM com o estado de dados atual.
-// A guarda por época previne re-entrância: se este componente já foi
-// sincronizado na época corrente, a chamada é ignorada.
+// syncLocal synchronizes the DOM with the current data state.
+// The epoch guard prevents re-entrance: if this component has already been
+// synced in the current epoch, the call is ignored.
 func (ps *PranaState) syncLocal(change *Change) {
 	if ps == nil || ps.Refs == nil {
 		return
 	}
 	if ps.lastEpoch == syncEpoch {
-		return // já sincronizado nesta época
+		return // already synced in this epoch
 	}
 	ps.lastEpoch = syncEpoch
 	ctx := Ctx{ps.Data.M}
@@ -112,14 +112,14 @@ func (ps *PranaState) syncLocal(change *Change) {
 
 // ── bindElement ───────────────────────────────────────────────────────────────
 
-// bindElement associa data ao elemento dom usando model como template HTML.
-// Cria o PranaState, extrai referências, e agenda a sincronização inicial.
-// Equivale à função bind() do JS original.
+// bindElement binds data to the DOM element using model as the HTML template.
+// Creates the PranaState, extracts references, and schedules the initial sync.
+// Equivalent to the bind() function from the original JS.
 //
-//	data       - mapa de dados inicial (de PranaMod.InitData())
-//	dom        - SPAN container na shadow root
-//	model      - raiz do template HTML (primeiro filho do shadow root após o CSS)
-//	attrs      - atributos do custom element (para inicializar dados)
+//	data       - initial data map (from PranaMod.InitData())
+//	dom        - SPAN container in the shadow root
+//	model      - root of the HTML template (first child of shadow root after CSS)
+//	attrs      - custom element attributes (for initializing data)
 func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]string) *ReactiveData {
 	state := &PranaState{
 		dom:   dom,
@@ -132,25 +132,25 @@ func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]s
 	}
 	state.Data = rd
 
-	// Extrai o mapa de bindings do template
+	// Extracts the bindings map from the template
 	state.Refs = getReferences(model, dom, model)
 
-	// Configura bindings bidirecionais para inputs com referências puras
+	// Sets up two-way bindings for inputs with pure references
 	if state.Refs != nil {
 		setupTwoWayBindingsInTree(model, state.Refs, state)
 	}
 
-	// Copia atributos do custom element para o mapa de dados.
-	// Coerce o valor string do atributo para o tipo existente no InitData,
-	// evitando que bool/int/float sejam corrompidos para string.
+	// Copies custom element attributes to the data map.
+	// Coerces the string value of the attribute to the existing type in InitData,
+	// preventing bool/int/float from being corrupted to string.
 	for _, a := range attrs {
 		data[a[0]] = coerceToType(a[1], data[a[0]])
 	}
 
-	// Sync inicial e inserção no DOM dentro de syncDepth, para que
-	// elementAttrChanged disparado pelo browser durante appendChild
-	// não inicie uma nova época (é parte desta mesma cadeia de propagação).
-	G.Logf(4, "bindElement: sync inicial\n")
+	// Initial sync and DOM insertion within syncDepth, so that
+	// elementAttrChanged triggered by the browser during appendChild
+	// does not start a new epoch (it is part of this same propagation chain).
+	G.Logf(4, "bindElement: initial sync\n")
 	syncDepth++
 	state.syncLocal(nil)
 	dom.Call("appendChild", model)
@@ -159,8 +159,8 @@ func bindElement(data map[string]any, dom js.Value, model js.Value, attrs [][2]s
 	return rd
 }
 
-// setupTwoWayBindingsInTree percorre recursivamente o DOMRefNode e instala
-// handlers de two-way binding nos nós DOM correspondentes.
+// setupTwoWayBindingsInTree recursively traverses the DOMRefNode and installs
+// two-way binding handlers on the corresponding DOM nodes.
 func setupTwoWayBindingsInTree(dom js.Value, ref *DOMRefNode, state *PranaState) {
 	if ref == nil {
 		return
@@ -177,7 +177,7 @@ func setupTwoWayBindingsInTree(dom js.Value, ref *DOMRefNode, state *PranaState)
 				ctxPtr := &Ctx{}
 				twb := setupTwoWayBinding(dom, ab.PureRef, state, ctxPtr)
 				st.TwoWay[attrName] = twb
-				G.Logf(4, "setupTwoWayBindingsInTree: two-way binding em %q\n", attrName)
+				G.Logf(4, "setupTwoWayBindingsInTree: two-way binding on %q\n", attrName)
 			}
 		}
 

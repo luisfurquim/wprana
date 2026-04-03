@@ -8,130 +8,130 @@ import (
 	"github.com/luisfurquim/goose"
 )
 
-// G é o logger global do pacote. Níveis recomendados: 1=somente erros, 2=geral, 3=detalhe,
-// 4=debug leve, 5=debug verboso, 6=debug sensível.
+// G is the global logger for the package. Recommended levels: 1=errors only, 2=general, 3=detail,
+// 4=light debug, 5=verbose debug, 6=sensitive debug.
 var G goose.Alert = goose.Alert(2)
 
-// ── Constantes de tipo de token ──────────────────────────────────────────────
+// ── Token type constants ────────────────────────────────────────────────────
 
-// TokenType representa o tipo de um token no parser de templates.
+// TokenType represents the type of a token in the template parser.
 type TokenType int8
 
 const (
-	TokTxt   TokenType = 0  // texto literal
-	TokRef   TokenType = 1  // referência {{ }}
-	TokStr   TokenType = 2  // string literal entre aspas
-	TokDot   TokenType = 3  // operador .
-	TokOpen  TokenType = 4  // operador [
-	TokClose TokenType = 5  // operador ]
-	TokNum   TokenType = 6  // número inteiro
-	TokIdent TokenType = 7  // identificador
-	TokWSep  TokenType = 8  // estado interno: aguardando separador
-	TokExpr  TokenType = 9  // sub-expressão (acesso por índice dinâmico)
-	TokAttr  TokenType = 10 // nó de atributo (tipo de DOMRefNode)
+	TokTxt   TokenType = 0  // literal text
+	TokRef   TokenType = 1  // reference {{ }}
+	TokStr   TokenType = 2  // string literal in quotes
+	TokDot   TokenType = 3  // operator .
+	TokOpen  TokenType = 4  // operator [
+	TokClose TokenType = 5  // operator ]
+	TokNum   TokenType = 6  // integer number
+	TokIdent TokenType = 7  // identifier
+	TokWSep  TokenType = 8  // internal state: waiting for separator
+	TokExpr  TokenType = 9  // sub-expression (dynamic index access)
+	TokAttr  TokenType = 10 // attribute node (DOMRefNode type)
 )
 
-// ── Estruturas de parse de templates ─────────────────────────────────────────
+// ── Template parse structures ───────────────────────────────────────────────
 
-// RefNode é um nó na árvore de referência parseada.
-// Para TokExpr, Sub contém a sub-expressão (e.g. o índice em arr[expr]).
+// RefNode is a node in the parsed reference tree.
+// For TokExpr, Sub contains the sub-expression (e.g. the index in arr[expr]).
 type RefNode struct {
 	Type   TokenType
 	StrVal string
 	IntVal int
-	Sub    []RefNode // preenchido apenas quando Type == TokExpr
+	Sub    []RefNode // populated only when Type == TokExpr
 }
 
-// TextSegment é um segmento de texto de template: literal ou referência.
+// TextSegment is a template text segment: literal or reference.
 type TextSegment struct {
 	IsRef bool
-	Lit   string    // se !IsRef: texto literal
-	Ref   []RefNode // se IsRef: árvore de referência parseada
+	Lit   string    // if !IsRef: literal text
+	Ref   []RefNode // if IsRef: parsed reference tree
 }
 
-// AttrBinding armazena os bindings de um único atributo.
+// AttrBinding stores the bindings of a single attribute.
 type AttrBinding struct {
 	Segs      []TextSegment
-	ForceSync bool      // atributo com prefixo &
-	PureRef   []RefNode // non-nil se o binding é uma referência pura (two-way binding)
+	ForceSync bool      // attribute with & prefix
+	PureRef   []RefNode // non-nil if the binding is a pure reference (two-way binding)
 }
 
-// DOMRefNode descreve os bindings de template para um nó DOM.
+// DOMRefNode describes the template bindings for a DOM node.
 type DOMRefNode struct {
-	Type     TokenType               // TokTxt = nó de texto; TokAttr = elemento
-	TextSegs []TextSegment           // segmentos de nó de texto
-	Attrs    map[string]*AttrBinding // bindings de atributos
-	Children map[int]*DOMRefNode     // bindings de filhos (por índice)
-	ArrayVar string                  // variável de controle de iteração (vazio se nenhum)
-	ArrayIdx string                  // variável de índice de iteração
-	NoSpan   bool                    // prefixo **: modelo é o próprio parent
-	ModelRef *DOMRefNode             // ref do template filho para ** (noSpan)
-	Cond     string                  // expressão condicional (vazio se nenhum)
-	CondTree []RefNode               // árvore parseada da condição
-	CondOp   string                  // operador condicional: "" = truthy, "eq" = igualdade, "neq" = desigualdade
-	CondVal  string                  // valor literal para comparação (usado com CondOp "eq" ou "neq")
+	Type     TokenType               // TokTxt = text node; TokAttr = element
+	TextSegs []TextSegment           // text node segments
+	Attrs    map[string]*AttrBinding // attribute bindings
+	Children map[int]*DOMRefNode     // child bindings (by index)
+	ArrayVar string                  // array iteration control variable (empty if none)
+	ArrayIdx string                  // array iteration index variable
+	NoSpan   bool                    // ** prefix: model is the parent itself
+	ModelRef *DOMRefNode             // child template ref for ** (noSpan)
+	Cond     string                  // conditional expression (empty if none)
+	CondTree []RefNode               // parsed tree of the condition
+	CondOp   string                  // conditional operator: "" = truthy, "eq" = equality, "neq" = inequality
+	CondVal  string                  // literal value for comparison (used with CondOp "eq" or "neq")
 }
 
-// ── Estado reativo ────────────────────────────────────────────────────────────
+// ── Reactive state ──────────────────────────────────────────────────────────
 
-// Change descreve uma mutação de dados para sync otimizado.
+// Change describes a data mutation for optimized sync.
 type Change struct {
 	Delete *DeleteInfo
 }
 
-// DeleteInfo descreve a remoção de um elemento de array.
+// DeleteInfo describes the removal of an array element.
 type DeleteInfo struct {
-	Target []any // slice alvo (referência, não cópia)
+	Target []any // target slice (reference, not copy)
 	Index  int
 }
 
-// Ctx é uma pilha de contextos de dados usada na resolução de referências.
+// Ctx is a data context stack used in reference resolution.
 type Ctx []any
 
-// PranaState mantém o estado reativo de um componente vinculado.
+// PranaState holds the reactive state of a bound component.
 type PranaState struct {
 	Data      *ReactiveData
 	Refs      *DOMRefNode
 	ForceSync bool
 	MaySync   bool
-	dom       js.Value // SPAN container na shadow root
-	model     js.Value // raiz do conteúdo HTML template
-	lastEpoch uint64   // época do último sync (para prevenção de ciclos)
+	dom       js.Value // SPAN container in the shadow root
+	model     js.Value // root of the HTML template content
+	lastEpoch uint64   // epoch of the last sync (for cycle prevention)
 }
 
-// ReactiveData encapsula o mapa de dados com notificação de mudança.
-// Mutations via Set/Delete/Append/DeleteAt disparam sync automático.
+// ReactiveData encapsulates the data map with change notification.
+// Mutations via Set/Delete/Append/DeleteAt trigger automatic sync.
 type ReactiveData struct {
 	M     map[string]any
 	state *PranaState
 }
 
-// TwoWayBinding mantém o estado de um binding bidirecional (input/select/textarea).
+// TwoWayBinding holds the state of a bidirectional binding (input/select/textarea).
 type TwoWayBinding struct {
 	Ref     []RefNode
-	CtxPtr  *Ctx    // atualizado a cada sync; closure do handler aponta para cá
-	Handler js.Func // handler JS; deve ser Released quando o elemento for removido
+	CtxPtr  *Ctx    // updated on each sync; handler closure points here
+	Handler js.Func // JS handler; must be Released when the element is removed
 }
 
-// NodeState armazena o estado Go-side para nós DOM gerenciados pelo prana.
-// É indexado pelo campo _pranaId do nó JS.
+// NodeState stores the Go-side state for DOM nodes managed by prana.
+// It is indexed by the _pranaId field of the JS node.
 type NodeState struct {
-	// Para nós plug de iteração de array
+	// For array iteration plug nodes
 	Model  js.Value
 	ACtrl  string
 	AIndex string
 	Tree   []RefNode
 
-	// Para nós condicionais (quando substituídos por comentário)
-	CondModel js.Value // o elemento original (guardado enquanto há comentário)
-	CondDaddy js.Value // parent para restauração de conditional
+	// For conditional nodes (when replaced by a comment)
+	CondModel js.Value // the original element (stored while there is a comment)
+	CondDaddy js.Value // parent for conditional restoration
 
-	// Para raízes de componente
+	// For component roots
 	State     *PranaState
 	PRoot     js.Value
 	EHandlers map[string]string
 
-	// Para bindings bidirecionais (indexado por nome de atributo)
+	// For bidirectional bindings (indexed by attribute name)
 	TwoWay map[string]*TwoWayBinding
 }
 
@@ -147,92 +147,92 @@ type KeyStorage interface {
 	Exists(key string) (bool, int64, error)
 }
 
-// ── Interface pública do módulo ───────────────────────────────────────────────
+// ── Module public interface ─────────────────────────────────────────────────
 
-// PranaObj é passado ao método Render do módulo.
+// PranaObj is passed to the module's Render method.
 type PranaObj struct {
 	This    *ReactiveData
-	Dom     js.Value // SPAN na shadow root
-	Element js.Value // o custom element em si
+	Dom     js.Value // SPAN in the shadow root
+	Element js.Value // the custom element itself
 	Trigger func(eventName string, args ...any)
 }
 
-// PranaMod é a interface que todo web component Go deve implementar.
-//   - InitData() retorna o mapa de dados inicial (equivale ao "return {...}" do JS).
-//   - Render(obj) é chamado após conexão ao DOM (equivale ao ready.then(...) do JS).
+// PranaMod is the interface that every Go web component must implement.
+//   - InitData() returns the initial data map (equivalent to the "return {...}" in JS).
+//   - Render(obj) is called after connection to the DOM (equivalent to the ready.then(...) in JS).
 type PranaMod interface {
 	InitData() map[string]any
 	Render(obj *PranaObj)
 }
 
-// TriggerHandler é o tipo de função usada como handler de eventos @.
-// Use o valor nil literal (TriggerHandler(nil)) como placeholder no InitData;
-// defina o corpo real no Render, onde obj está disponível.
+// TriggerHandler is the function type used as a handler for @ events.
+// Use the nil literal (TriggerHandler(nil)) as a placeholder in InitData;
+// define the actual body in Render, where obj is available.
 type TriggerHandler func(...any)
 
-// CSSPart representa uma seção nomeada de CSS de um componente.
-// A ordem dos CSSParts importa: Vars deve vir antes de Design,
-// pois Design pode usar variáveis definidas em Vars.
+// CSSPart represents a named CSS section of a component.
+// The order of CSSParts matters: Vars must come before Design,
+// because Design may use variables defined in Vars.
 type CSSPart struct {
 	Name    string
 	Content string
 }
 
-// Customizable é uma interface opcional que módulos podem implementar
-// para permitir que aplicações consumidoras alterem partes do CSS.
-// Módulos que satisfazem apenas PranaMod têm CSS fixo; módulos que
-// satisfazem Customizable permitem substituição de seções de CSS
-// (ex.: trocar apenas as variáveis de cor, mantendo o layout).
+// Customizable is an optional interface that modules can implement
+// to allow consuming applications to change parts of the CSS.
+// Modules that satisfy only PranaMod have fixed CSS; modules that
+// satisfy Customizable allow replacement of CSS sections
+// (e.g.: swap only the color variables, keeping the layout).
 type Customizable interface {
 	PranaMod
 	ListCSS() []CSSPart
 	ReplaceCSS(key string, content string)
 }
 
-// ModFactory cria uma nova instância de PranaMod.
+// ModFactory creates a new instance of PranaMod.
 type ModFactory func() PranaMod
 
-// modDef é a definição interna de um módulo registrado.
+// modDef is the internal definition of a registered module.
 type modDef struct {
 	factory  ModFactory
 	html     string
 	css      string
-	observed []string // atributos observados pelo attributeChangedCallback
+	observed []string // attributes observed by attributeChangedCallback
 }
 
-// ── Registros globais ─────────────────────────────────────────────────────────
+// ── Global registries ───────────────────────────────────────────────────────
 
 var (
-	// moduleRegistry armazena os módulos registrados via Register().
+	// moduleRegistry stores the modules registered via Register().
 	moduleRegistry = map[string]*modDef{}
 
-	// nodeRegistry armazena o estado Go-side de nós DOM, indexado por _pranaId.
+	// nodeRegistry stores the Go-side state of DOM nodes, indexed by _pranaId.
 	nodeRegistry = map[int64]*NodeState{}
 
-	// instanceRegistry rastreia as instâncias vivas de cada custom element
-	// por tagName, permitindo que Update() atualize o CSS de todas elas.
+	// instanceRegistry tracks the live instances of each custom element
+	// by tagName, allowing Update() to update the CSS of all of them.
 	instanceRegistry = map[string][]js.Value{}
 
-	// nextNodeID é o próximo ID a ser atribuído.
+	// nextNodeID is the next ID to be assigned.
 	nextNodeID int64 = 1
 
-	// jsSVGNS é o namespace SVG.
+	// jsSVGNS is the SVG namespace.
 	jsSVGNS = "http://www.w3.org/2000/svg"
 
-	// syncEpoch é o contador global de épocas de propagação.
-	// Cada cadeia de propagação (Set, Delete, etc.) incrementa a época.
-	// Componentes já sincronizados na época corrente são ignorados,
-	// quebrando ciclos de propagação circular.
-	// Inicia em 1 para que lastEpoch=0 (default de PranaState) seja sempre < syncEpoch.
+	// syncEpoch is the global propagation epoch counter.
+	// Each propagation chain (Set, Delete, etc.) increments the epoch.
+	// Components already synced in the current epoch are skipped,
+	// breaking circular propagation cycles.
+	// Starts at 1 so that lastEpoch=0 (PranaState default) is always < syncEpoch.
 	syncEpoch uint64 = 1
 
-	// syncDepth conta o nível de aninhamento de sync (0 = nenhum sync em curso).
-	// Usado para distinguir elementAttrChanged disparado internamente (por
-	// setAttribute durante sync) de mudanças externas (JavaScript do usuário).
+	// syncDepth counts the nesting level of sync (0 = no sync in progress).
+	// Used to distinguish elementAttrChanged triggered internally (by
+	// setAttribute during sync) from external changes (user JavaScript).
 	syncDepth int
 )
 
-// jsVars são inicializadas em init() para evitar chamadas repetidas.
+// jsVars are initialized in init() to avoid repeated calls.
 var (
 	jsGlobal js.Value
 	jsDoc    js.Value
@@ -241,9 +241,10 @@ var (
 func init() {
 	jsGlobal = js.Global()
 	jsDoc = jsGlobal.Get("document")
+	initHash()
 }
 
-// assignNodeID atribui um _pranaId único ao nó e retorna o ID.
+// assignNodeID assigns a unique _pranaId to the node and returns the ID.
 func assignNodeID(node js.Value) int64 {
 	id := nextNodeID
 	nextNodeID++
@@ -251,7 +252,7 @@ func assignNodeID(node js.Value) int64 {
 	return id
 }
 
-// getNodeID lê o _pranaId de um nó JS. Retorna (0, false) se não tiver.
+// getNodeID reads the _pranaId from a JS node. Returns (0, false) if it doesn't have one.
 func getNodeID(node js.Value) (int64, bool) {
 	v := node.Get("_pranaId")
 	if v.IsUndefined() || v.IsNull() {
@@ -260,7 +261,7 @@ func getNodeID(node js.Value) (int64, bool) {
 	return int64(v.Int()), true
 }
 
-// getOrCreateState retorna (ou cria) o NodeState associado a um nó DOM.
+// getOrCreateState returns (or creates) the NodeState associated with a DOM node.
 func getOrCreateState(node js.Value) (int64, *NodeState) {
 	id, ok := getNodeID(node)
 	if ok {
@@ -274,7 +275,7 @@ func getOrCreateState(node js.Value) (int64, *NodeState) {
 	return id, st
 }
 
-// getState retorna o NodeState de um nó DOM, ou nil se não existir.
+// getState returns the NodeState of a DOM node, or nil if it doesn't exist.
 func getState(node js.Value) *NodeState {
 	id, ok := getNodeID(node)
 	if !ok {

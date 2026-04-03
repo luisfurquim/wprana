@@ -7,11 +7,11 @@ import (
 	"strconv"
 )
 
-// ── Parser de texto de template ───────────────────────────────────────────────
+// ── Template text parser ────────────────────────────────────────────────────
 
-// parseText divide uma string de template em segmentos literais e referências.
-// Referências são delimitadas por {{ e }}. Cada referência é imediatamente
-// tokenizada e parseada em árvore RefNode.
+// parseText splits a template string into literal segments and references.
+// References are delimited by {{ and }}. Each reference is immediately
+// tokenized and parsed into a RefNode tree.
 func parseText(s string) ([]TextSegment, error) {
 	var segs []TextSegment
 	i, start := 0, 0
@@ -53,7 +53,7 @@ func parseText(s string) ([]TextSegment, error) {
 	return segs, nil
 }
 
-// hasRef retorna true se algum segmento for uma referência.
+// hasRef returns true if any segment is a reference.
 func hasRef(segs []TextSegment) bool {
 	for i := range segs {
 		if segs[i].IsRef {
@@ -63,21 +63,21 @@ func hasRef(segs []TextSegment) bool {
 	return false
 }
 
-// isPureTextSegs retorna true se todos os segmentos forem literais (nenhuma referência).
+// isPureTextSegs returns true if all segments are literals (no references).
 func isPureTextSegs(segs []TextSegment) bool {
 	return !hasRef(segs)
 }
 
-// ── Tokenizador de expressões de referência ───────────────────────────────────
+// ── Reference expression tokenizer ──────────────────────────────────────────
 
-// preToken é usado internamente por splitStrings.
+// preToken is used internally by splitStrings.
 type preToken struct {
 	isStr bool
 	val   string
 }
 
-// splitStrings separa strings literais entre aspas do restante do código.
-// Equivale ao parseString do JS original.
+// splitStrings separates quoted string literals from the rest of the code.
+// Equivalent to the parseString from the original JS.
 func splitStrings(s string) []preToken {
 	var result []preToken
 	i, start := 0, 0
@@ -109,8 +109,8 @@ func splitStrings(s string) []preToken {
 	return result
 }
 
-// splitSymbols tokeniza um fragmento de código sem strings literais.
-// Reconhece: `.`, `[`, `]`, números, identificadores.
+// splitSymbols tokenizes a code fragment without string literals.
+// Recognizes: `.`, `[`, `]`, numbers, identifiers.
 func splitSymbols(s string) []RefNode {
 	var toks []RefNode
 	i := 0
@@ -140,7 +140,7 @@ func splitSymbols(s string) []RefNode {
 			continue
 		}
 
-		// Número com sinal opcional
+		// Number with optional sign
 		isSign := (c == '+' || c == '-') && i+1 < n && s[i+1] >= '0' && s[i+1] <= '9'
 		isDigit := c >= '0' && c <= '9'
 
@@ -152,14 +152,14 @@ func splitSymbols(s string) []RefNode {
 			for j < n && s[j] >= '0' && s[j] <= '9' {
 				j++
 			}
-			// parte decimal (armazenamos apenas a parte inteira via parseInt)
+			// decimal part (we only store the integer part via parseInt)
 			if j < n && s[j] == '.' {
 				j++
 				for j < n && s[j] >= '0' && s[j] <= '9' {
 					j++
 				}
 			}
-			// parseInt replica o comportamento do JS (trunca fração)
+			// parseInt replicates the JS behavior (truncates fraction)
 			intStr := s[i:j]
 			if idx := indexByte(intStr, '.'); idx >= 0 {
 				intStr = intStr[:idx]
@@ -170,7 +170,14 @@ func splitSymbols(s string) []RefNode {
 			continue
 		}
 
-		// Identificador: [a-zA-Z_$][0-9a-zA-Z_$]*
+		// Hash fragment shorthand: standalone '#' is a built-in reference
+		if c == '#' {
+			toks = append(toks, RefNode{Type: TokIdent, StrVal: "#"})
+			i++
+			continue
+		}
+
+		// Identifier: [a-zA-Z_$][0-9a-zA-Z_$]*
 		if c == '_' || c == '$' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
 			j := i + 1
 			for j < n {
@@ -186,14 +193,14 @@ func splitSymbols(s string) []RefNode {
 			continue
 		}
 
-		// Caractere desconhecido: ignora
+		// Unknown character: skip
 		i++
 	}
 
 	return toks
 }
 
-// indexByte encontra o primeiro índice de b em s, ou -1.
+// indexByte finds the first index of b in s, or -1.
 func indexByte(s string, b byte) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == b {
@@ -203,9 +210,9 @@ func indexByte(s string, b byte) int {
 	return -1
 }
 
-// tokenize converte uma expressão de referência em lista de RefNodes.
-// Equivale ao tokenize() do JS: primeiro extrai strings literais,
-// depois tokeniza os demais fragmentos.
+// tokenize converts a reference expression into a list of RefNodes.
+// Equivalent to the tokenize() from the JS: first extracts string literals,
+// then tokenizes the remaining fragments.
 func tokenize(s string) []RefNode {
 	var toks []RefNode
 
@@ -221,35 +228,35 @@ func tokenize(s string) []RefNode {
 	return toks
 }
 
-// ── Parser de referência ──────────────────────────────────────────────────────
+// ── Reference parser ────────────────────────────────────────────────────────
 
-// parseReference constrói a árvore de referência a partir de uma lista de tokens.
-// Consome tokens do início da fatia apontada por toks (equivale ao splice do JS).
-// Equivale ao parseReference() do JS original.
+// parseReference builds the reference tree from a list of tokens.
+// Consumes tokens from the beginning of the slice pointed to by toks (equivalent to JS splice).
+// Equivalent to the parseReference() from the original JS.
 func parseReference(toks *[]RefNode) ([]RefNode, error) {
 	if len(*toks) == 0 {
-		return nil, fmt.Errorf("parseReference: referência vazia")
+		return nil, fmt.Errorf("parseReference: empty reference")
 	}
 
 	token := popRef(toks)
 
-	// Literal isolado (num ou str): retorna imediatamente
+	// Standalone literal (num or str): returns immediately
 	if token.Type == TokNum || token.Type == TokStr {
 		if len(*toks) == 0 || (*toks)[0].Type == TokClose {
 			if len(*toks) > 0 {
-				popRef(toks) // consome o ']'
+				popRef(toks) // consumes the ']'
 			}
 			return []RefNode{token}, nil
 		}
 	}
 
 	if token.Type != TokIdent {
-		return nil, fmt.Errorf("parseReference: esperado identificador, encontrado tipo=%d val=%q", token.Type, token.StrVal)
+		return nil, fmt.Errorf("parseReference: expected identifier, found type=%d val=%q", token.Type, token.StrVal)
 	}
 
 	tree := []RefNode{token}
 
-	// Estado: stWSep = aguarda separador (. ou [); stRef = aguarda ident/str
+	// State: stWSep = waiting for separator (. or [); stRef = waiting for ident/str
 	const stWSep, stRef = 0, 1
 	stat := stWSep
 
@@ -265,7 +272,7 @@ func parseReference(toks *[]RefNode) ([]RefNode, error) {
 				tree = append(tree, RefNode{Type: TokExpr, Sub: sub})
 				continue
 			} else if token.Type != TokDot {
-				return nil, fmt.Errorf("parseReference: esperado '.' ou '[', encontrado tipo=%d", token.Type)
+				return nil, fmt.Errorf("parseReference: expected '.' or '[', found type=%d", token.Type)
 			}
 			stat = stRef
 		} else { // stRef
@@ -274,11 +281,11 @@ func parseReference(toks *[]RefNode) ([]RefNode, error) {
 				stat = stWSep
 				continue
 			}
-			return nil, fmt.Errorf("parseReference: esperado identificador, encontrado tipo=%d", token.Type)
+			return nil, fmt.Errorf("parseReference: expected identifier, found type=%d", token.Type)
 		}
 	}
 
-	// Consome ']' de fechamento se presente
+	// Consumes closing ']' if present
 	if len(*toks) > 0 && (*toks)[0].Type == TokClose {
 		popRef(toks)
 	}
@@ -286,7 +293,7 @@ func parseReference(toks *[]RefNode) ([]RefNode, error) {
 	return tree, nil
 }
 
-// popRef remove e retorna o primeiro token da fatia.
+// popRef removes and returns the first token from the slice.
 func popRef(toks *[]RefNode) RefNode {
 	t := (*toks)[0]
 	*toks = (*toks)[1:]

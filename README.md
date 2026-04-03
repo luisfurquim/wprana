@@ -1,9 +1,30 @@
 # wprana
 
-**wprana** is a Go/WASM framework for building reactive web components. It lets you write
-custom HTML elements entirely in Go, with automatic data binding, conditional rendering,
-array iteration, two-way form binding, and parent-child communication — all running as
-WebAssembly in the browser.
+[![Go Reference](https://pkg.go.dev/badge/github.com/luisfurquim/wprana.svg)](https://pkg.go.dev/github.com/luisfurquim/wprana)
+[![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
+[![Go Report Card](https://goreportcard.com/badge/github.com/luisfurquim/wprana)](https://goreportcard.com/report/github.com/luisfurquim/wprana)
+
+**Build reactive Web Components in pure Go — no JavaScript framework required.**
+
+wprana compiles to WebAssembly and gives you custom HTML elements with
+automatic data binding, conditional rendering, array iteration, two-way
+form binding, hash-based routing, and parent-child communication — all
+authored in Go and running natively in the browser.
+
+### Why WPrana?
+
+| | |
+|---|---|
+| **Pure Go** | Write components, state, and logic entirely in Go. Templates stay in plain HTML. |
+| **Reactive** | Change a value with `Set()` and the DOM updates automatically — no virtual DOM diffing overhead. |
+| **Lightweight** | Direct DOM manipulation via targeted refs. No framework runtime to download beyond your WASM binary. |
+| **Encapsulated** | Each component lives inside a Shadow DOM with scoped CSS — no style leaks, no naming collisions. |
+| **Two-Way Binding** | The `&` prefix syncs `<input>`, `<select>`, and `<textarea>` with your Go data map in both directions. |
+| **Hash Routing** | Built-in `{{#}}` binding and `wprana.GoTo()` for SPA navigation without a router library. |
+| **Composable** | Nest components freely. Parent-to-child data flows via attributes; child-to-parent events flow via `@` triggers. |
+| **Standard Web** | Uses native Custom Elements v1 and Shadow DOM — works alongside any existing page or framework. |
+
+---
 
 ## Table of Contents
 
@@ -12,6 +33,7 @@ WebAssembly in the browser.
 - [Creating a Module](#creating-a-module)
 - [Template Syntax](#template-syntax)
   - [Expression Binding](#expression-binding)
+  - [Hash Fragment Binding](#hash-fragment-binding)
   - [Conditional Rendering](#conditional-rendering)
     - [Boolean (truthiness)](#boolean-truthiness)
     - [Equality](#equality-varvalue)
@@ -20,6 +42,8 @@ WebAssembly in the browser.
   - [Two-Way Binding](#two-way-binding)
   - [Events (Child to Parent)](#events-child-to-parent)
 - [Reactive Data API](#reactive-data-api)
+  - [Navigation — Hash Fragment](#navigation--hash-fragment)
+- [How DOM Updates Work](#how-dom-updates-work)
 - [Helper Packages](#helper-packages)
   - [wprana/dom — Events and Queries](#wpranadom--events-and-queries)
   - [wprana/timer — Timers](#wpranatimer--timers)
@@ -35,6 +59,7 @@ WebAssembly in the browser.
   - [wprana/widget/combobox — Multi-select Combobox](#wpranawidgetcombobox--multi-select-combobox)
 - [Component Lifecycle](#component-lifecycle)
 - [Parent-Child Communication](#parent-child-communication)
+- [Syntax Quick-Reference](#syntax-quick-reference)
 - [Important Notes](#important-notes)
 - [Full Example](#full-example)
 - [License](#license)
@@ -43,13 +68,128 @@ WebAssembly in the browser.
 
 ## Quick Start
 
-```bash
-# Build the WASM binary
-GOOS=js GOARCH=wasm go build -o main.wasm .
+WASM binaries cannot be loaded from `file://` URLs. The snippet below
+builds a hello-world component, copies the required runtime files, and
+starts a tiny Go server so you can open the page in a browser.
 
-# Copy the Go WASM runtime support
-cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" ./static/
+```bash
+# 1. Create the project
+mkdir hello-wprana && cd hello-wprana
+go mod init hello-wprana
+go get github.com/luisfurquim/wprana
+
+# 2. Copy the JS helpers from the wprana module
+WPRANA=$(go list -m -f '{{.Dir}}' github.com/luisfurquim/wprana)
+mkdir -p static
+cp "$WPRANA/prana_helper.js" static/
+cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" static/
 ```
+
+Create `static/index.html`:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+   <script src="prana_helper.js"></script>
+   <script src="wasm_exec.js"></script>
+   <script>
+      const go = new Go();
+      WebAssembly
+         .instantiateStreaming(fetch("main.wasm"), go.importObject)
+         .then(r => go.run(r.instance))
+         .catch(console.error);
+   </script>
+</head>
+<body>
+   <hello-world></hello-world>
+</body>
+</html>
+```
+
+Create `mod/hello/hello.go`:
+
+```go
+//go:build js && wasm
+
+package hello
+
+import (
+    _ "embed"
+    "github.com/luisfurquim/wprana"
+)
+
+//go:embed hello.html
+var htmlContent string
+
+type Hello struct{}
+
+func init() {
+    wprana.Register("hello-world", htmlContent, "",
+        func() wprana.PranaMod { return &Hello{} })
+}
+
+func (h *Hello) InitData() map[string]any {
+    return map[string]any{"greeting": "Hello from Go + WASM!"}
+}
+
+func (h *Hello) Render(_ *wprana.PranaObj) {}
+```
+
+Create `mod/hello/hello.html`:
+
+```html
+<h1>{{greeting}}</h1>
+```
+
+Create `main.go`:
+
+```go
+//go:build js && wasm
+
+package main
+
+import (
+    "github.com/luisfurquim/wprana"
+    _ "hello-wprana/mod/hello"
+)
+
+func main() { wprana.Main() }
+```
+
+Build and serve:
+
+```bash
+# 3. Build the WASM binary
+GOOS=js GOARCH=wasm go build -o static/main.wasm .
+
+# 4. Start a minimal dev server (paste into serve.go, then run it)
+cat > serve.go.tmp <<'GOFILE'
+//go:build ignore
+
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func main() {
+    fs := http.FileServer(http.Dir("static"))
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path[len(r.URL.Path)-5:] == ".wasm" {
+            w.Header().Set("Content-Type", "application/wasm")
+        }
+        fs.ServeHTTP(w, r)
+    })
+    fmt.Println("Listening on http://localhost:8080")
+    http.ListenAndServe(":8080", nil)
+}
+GOFILE
+go run serve.go.tmp
+```
+
+Open **http://localhost:8080** and you should see "Hello from Go + WASM!".
 
 ## Project Setup
 
@@ -214,6 +354,33 @@ updated when the data changes.
 <!-- Attributes -->
 <img src="{{avatar_url}}" alt="{{username}}" />
 ```
+
+### Hash Fragment Binding
+
+The special reference `{{#}}` resolves to the current URL hash fragment
+(i.e. the portion of `window.location.hash` after the `#` sign).
+
+```html
+<!-- If URL is https://example.com/app#settings, displays "settings" -->
+<span>Current view: {{#}}</span>
+
+<!-- Conditional rendering based on hash -->
+<div ?#="home">Home content here</div>
+<div ?#="settings">Settings panel</div>
+```
+
+wprana automatically monitors `window.location.hash` and triggers a sync on
+**all** live component instances whenever the hash changes, so `{{#}}`
+references are always up to date.
+
+To change the hash programmatically from Go:
+
+```go
+wprana.GoTo("settings")   // sets window.location.hash = "settings"
+```
+
+This fires the browser's `hashchange` event, which in turn updates every
+`{{#}}` binding across all components.
 
 ### Conditional Rendering
 
@@ -475,6 +642,75 @@ func (c *MyComponent) Render(obj *wprana.PranaObj) {
 }
 ```
 
+### Navigation — Hash Fragment
+
+wprana exposes a package-level function to change the URL hash fragment:
+
+```go
+// Navigate to a new view
+wprana.GoTo("settings")  // -> window.location.hash = "#settings"
+
+// Clear the hash
+wprana.GoTo("")          // -> window.location.hash = ""
+```
+
+All `{{#}}` bindings and `?#="value"` conditionals update automatically.
+
+## How DOM Updates Work
+
+wprana does **not** use a Virtual DOM. Instead it relies on **direct,
+targeted DOM manipulation** guided by a compile-time reference map.
+
+### Reference Extraction
+
+When a component is first connected, wprana walks the HTML template once
+and builds a `DOMRefNode` tree — a lightweight map that records, for every
+DOM node, which data keys appear in its text content and attributes. This
+map is stored alongside the component's reactive state and never
+rebuilt.
+
+### Synchronization Cycle
+
+Every mutation through the `ReactiveData` API (`Set`, `Delete`, `Append`,
+`DeleteAt`, `SetAt`, or `Sync`) increments a global **epoch counter** and
+kicks off a synchronization pass:
+
+1. **Epoch guard** — each component tracks the last epoch it was synced at.
+   If the current epoch matches, the sync is skipped, breaking circular
+   propagation between parent and child components.
+
+2. **Tree walk** — the engine walks the `DOMRefNode` tree in parallel with
+   the live DOM tree. For each node it:
+   - **Text nodes**: resolves all `{{expression}}` segments against the
+     current data context and writes the result to `node.data` (or
+     `element.value` for `<textarea>`).
+   - **Attributes**: resolves each bound attribute's segments and calls
+     `setAttribute` only when the new value differs from the current one.
+   - **Conditionals** (`?`): evaluates the condition. If false, the element
+     is replaced by a comment placeholder; if true and currently hidden,
+     the original element is restored from the stored reference.
+   - **Arrays** (`*` / `**`): compares the current array length to the
+     number of child nodes. Adds clones of the template for new items,
+     removes excess nodes for deleted items, and recursively syncs each
+     child with its corresponding array element.
+   - **Two-way bindings** (`&`): updates the input's `value` property
+     and keeps the stored context pointer current so the `onchange`
+     handler always writes back to the correct data key.
+
+3. **Propagation** — after the local sync, observed attributes on child
+   custom elements are updated via `setAttribute`, which triggers their
+   own `attributeChangedCallback` and a downstream sync (subject to the
+   same epoch guard).
+
+### Why Not a Virtual DOM?
+
+A virtual DOM diffs an entire tree snapshot to compute the minimum set of
+mutations. wprana skips the diff entirely: the reference map already knows
+*which* DOM nodes depend on *which* data keys, so it can jump directly to
+the affected nodes. This makes updates O(bindings) rather than O(tree
+size), with no garbage from disposable tree snapshots — an important
+property in a WASM environment where GC pauses are more noticeable.
+
 ## Helper Packages
 
 Helper functions are organized into subpackages so applications only
@@ -630,8 +866,8 @@ It handles common Go types out of the box:
 | `string` | passthrough | passthrough |
 | `[]byte` | `string(v)` | `[]byte(s)` |
 | `bool` | `"true"` / `"false"` | `strconv.ParseBool` |
-| `int`, `int8`–`int64` | `strconv.FormatInt` | `strconv.ParseInt` |
-| `uint`, `uint8`–`uint64` | `strconv.FormatUint` | `strconv.ParseUint` |
+| `int`, `int8`--`int64` | `strconv.FormatInt` | `strconv.ParseInt` |
+| `uint`, `uint8`--`uint64` | `strconv.FormatUint` | `strconv.ParseUint` |
 | `float32`, `float64` | `strconv.FormatFloat` | `strconv.ParseFloat` |
 
 #### KV — Recommended API (implements wprana.KeyStorage)
@@ -810,7 +1046,7 @@ keyboard support.
 
 | Attribute | Description |
 |-----------|-------------|
-| `options` | JSON array of strings or `[{"label":"…","value":"…"},…]` objects |
+| `options` | JSON array of strings or `[{"label":"...","value":"..."},...]` objects |
 | `placeholder` | Input placeholder text (default: "Type to filter...") |
 
 **Events (via `@`):**
@@ -947,9 +1183,23 @@ func (lgn *Login) Render(obj *wprana.PranaObj) {
 }
 ```
 
-The flow is: `obj.Trigger("login")` → looks up `@login` attribute on the
-child element → finds `"on_login"` → resolves `on_login` in the parent's
-data map → calls the function.
+The flow is: `obj.Trigger("login")` -> looks up `@login` attribute on the
+child element -> finds `"on_login"` -> resolves `on_login` in the parent's
+data map -> calls the function.
+
+## Syntax Quick-Reference
+
+| Prefix | Name | Example | Description |
+|--------|------|---------|-------------|
+| `{{ }}` | Binding | `{{user.name}}` | Display a data value. Updates automatically on change. |
+| `{{#}}` | Hash | `{{#}}` | Current URL hash fragment. Updates on `hashchange`. |
+| `?` | Conditional | `?is_admin` | Show/hide element based on truthiness. |
+| `?="val"` | Equality | `?status="active"` | Show element only when value equals `"val"`. |
+| `?!="val"` | Inequality | `?status!="deleted"` | Show element only when value does **not** equal `"val"`. |
+| `*` | Iteration | `*items:i` | Repeat element for each array item (wrapped in `<span>`). |
+| `**` | Iteration (no wrap) | `**items:i` | Repeat first child for each item (container stays). |
+| `&` | Two-way | `&value="{{val}}"` | Sync `<input>` / `<select>` / `<textarea>` with data. |
+| `@` | Event | `@click="on_save"` | Dispatch child event to parent handler function. |
 
 ## Important Notes
 

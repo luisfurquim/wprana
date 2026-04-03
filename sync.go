@@ -122,6 +122,8 @@ func condSync(dom js.Value, ref *DOMRefNode, ctx Ctx, index any, state *PranaSta
 		cond = fmt.Sprintf("%v", res) == ref.CondVal
 	case "neq":
 		cond = fmt.Sprintf("%v", res) != ref.CondVal
+	case "!":
+		cond = !isTruthy(res)
 	default:
 		cond = isTruthy(res)
 	}
