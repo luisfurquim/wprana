@@ -21,12 +21,12 @@ var (
 	once      sync.Once
 )
 
-// Reply representa a resposta recebida do Service Worker.
+// Reply represents the response received from the Service Worker.
 type Reply struct {
-	Raw js.Value // o objeto data inteiro da mensagem
+	Raw js.Value // the entire data object of the message
 }
 
-// OK retorna o valor do campo "ok" da resposta.
+// OK returns the value of the "ok" field of the response.
 func (r Reply) OK() bool {
 	v := r.Raw.Get("ok")
 	if v.IsUndefined() {
@@ -35,7 +35,7 @@ func (r Reply) OK() bool {
 	return v.Bool()
 }
 
-// Error retorna o campo "error" da resposta, ou "".
+// Error returns the "error" field of the response, or "".
 func (r Reply) Error() string {
 	v := r.Raw.Get("error")
 	if v.IsUndefined() || v.IsNull() {
@@ -44,18 +44,18 @@ func (r Reply) Error() string {
 	return v.String()
 }
 
-// Get retorna o valor de um campo arbitrário da resposta.
+// Get returns the value of an arbitrary field from the response.
 func (r Reply) Get(key string) js.Value {
 	return r.Raw.Get(key)
 }
 
-// ensureListener registra um listener global (uma vez) no navigator.serviceWorker
-// para receber respostas do SW. Filtra pelo replyType configurado.
-var replyTypes   = map[string]bool{}
+// ensureListener registers a global listener (once) on navigator.serviceWorker
+// to receive responses from the SW. Filters by the configured replyType.
+var replyTypes = map[string]bool{}
 var replyTypesMu sync.RWMutex
 
-// RegisterReplyType registra um tipo de mensagem que o listener deve capturar.
-// Deve ser chamado antes de Send para cada tipo de resposta esperado.
+// RegisterReplyType registers a message type that the listener should capture.
+// Must be called before Send for each expected reply type.
 func RegisterReplyType(msgType string) {
 	replyTypesMu.Lock()
 	replyTypes[msgType] = true
@@ -111,21 +111,21 @@ func ensureListener() {
 	})
 }
 
-// getController retorna o controller do Service Worker, ou erro se não disponível.
-// Usa polling com setTimeout para aguardar até maxWait milissegundos.
+// getController returns the Service Worker controller, or an error if unavailable.
+// Uses polling with setTimeout to wait up to maxWait milliseconds.
 func getController() (js.Value, error) {
 	sw := jsGlobal.Get("navigator").Get("serviceWorker")
 	if sw.IsUndefined() || sw.IsNull() {
 		return js.Value{}, errors.New("message: serviceWorker not supported")
 	}
 
-	const maxAttempts = 50 // 50 × 100ms = 5s máximo
+	const maxAttempts = 50 // 50 x 100ms = 5s max
 	for i := 0; i < maxAttempts; i++ {
 		controller := sw.Get("controller")
 		if !controller.IsNull() && !controller.IsUndefined() {
 			return controller, nil
 		}
-		// Cede ao event loop via setTimeout (não bloqueia o JS)
+		// Yield to the event loop via setTimeout (does not block JS)
 		done := make(chan struct{})
 		jsGlobal.Call("setTimeout", js.FuncOf(func(this js.Value, args []js.Value) any {
 			close(done)
@@ -136,9 +136,9 @@ func getController() (js.Value, error) {
 	return js.Value{}, errors.New("message: service worker controller not available after 5s")
 }
 
-// Send envia uma mensagem ao Service Worker e bloqueia até receber a resposta.
-// O campo "type" e "requestId" são adicionados automaticamente ao mapa msg.
-// replyType é o tipo de mensagem que o SW deve usar na resposta.
+// Send sends a message to the Service Worker and blocks until a reply is received.
+// The "type" and "requestId" fields are added automatically to the msg map.
+// replyType is the message type that the SW should use in the response.
 func Send(msgType string, replyType string, msg map[string]any) (Reply, error) {
 	RegisterReplyType(replyType)
 

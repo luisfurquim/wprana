@@ -11,8 +11,8 @@ import (
 
 var jsGlobal = wprana.JSGlobal()
 
-// SetTimeout agenda fn para ser executado após delay milissegundos.
-// Retorna um canal que fecha quando fn completar.
+// SetTimeout schedules fn to run after delay milliseconds.
+// Returns a channel that closes when fn completes.
 func SetTimeout(fn func(), delay int) <-chan struct{} {
 	done := make(chan struct{})
 	jsGlobal.Call("setTimeout", wprana.JSFuncOnce(func() {
@@ -22,8 +22,8 @@ func SetTimeout(fn func(), delay int) <-chan struct{} {
 	return done
 }
 
-// SetInterval agenda fn para ser executado a cada interval milissegundos.
-// Retorna uma função cancel() que interrompe o intervalo.
+// SetInterval schedules fn to run every interval milliseconds.
+// Returns a cancel() function that stops the interval.
 func SetInterval(fn func(), interval int) (cancel func()) {
 	var id js.Value
 	f := js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -37,8 +37,8 @@ func SetInterval(fn func(), interval int) (cancel func()) {
 	}
 }
 
-// Sleep bloqueia a goroutine atual por ms milissegundos, cedendo o controle
-// ao event loop JavaScript enquanto aguarda.
+// Sleep blocks the current goroutine for ms milliseconds, yielding control
+// to the JavaScript event loop while waiting.
 func Sleep(ms int) {
 	done := make(chan struct{})
 	jsGlobal.Call("setTimeout", wprana.JSFuncOnce(func() {
@@ -47,15 +47,15 @@ func Sleep(ms int) {
 	<-done
 }
 
-// Ticker envia em Tick a cada intervalo configurado.
+// Ticker sends on Tick at the configured interval.
 type Ticker struct {
 	id   js.Value
 	fn   js.Func
 	Tick chan struct{}
 }
 
-// NewTicker retorna um Ticker que envia em Tick a cada ms milissegundos.
-// Chame Stop() para liberar recursos.
+// NewTicker returns a Ticker that sends on Tick every ms milliseconds.
+// Call Stop() to release resources.
 func NewTicker(ms int) *Ticker {
 	var tk Ticker
 
@@ -77,7 +77,7 @@ func NewTicker(ms int) *Ticker {
 	return &tk
 }
 
-// Stop interrompe o ticker e libera recursos.
+// Stop stops the ticker and releases resources.
 func (tk *Ticker) Stop() {
 	jsGlobal.Call("clearInterval", tk.id)
 	tk.fn.Release()

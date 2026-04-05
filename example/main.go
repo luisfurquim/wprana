@@ -1,18 +1,18 @@
 //go:build js && wasm
 
-// Package main é o ponto de entrada do binário WASM.
-// Importa todos os módulos (side-effect imports para acionar seus init())
-// e então chama wprana.Main() que define os custom elements e bloqueia.
+// Package main is the WASM binary entry point.
+// It imports all modules (side-effect imports to trigger their init())
+// and then calls wprana.Main() which defines the custom elements and blocks.
 package main
 
 import (
 	"github.com/luisfurquim/wprana"
 
-	// Side-effect imports: cada init() registra o módulo via wprana.Register()
+	// Side-effect imports: each init() registers the module via wprana.Register()
 	_ "github.com/luisfurquim/wprana/example/mywidget"
 )
 
 func main() {
-	// Define todos os custom elements registrados e mantém o WASM ativo.
+	// Define all registered custom elements and keep the WASM alive.
 	wprana.Main()
 }

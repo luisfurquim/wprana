@@ -11,14 +11,14 @@ import (
 
 var jsGlobal = wprana.JSGlobal()
 
-// Get retorna window.location.href como *url.URL.
+// Get returns window.location.href as *url.URL.
 func Get() (*url.URL, error) {
 	href := jsGlobal.Get("location").Get("href").String()
 	return url.Parse(href)
 }
 
-// GetTop retorna top.location.href como *url.URL.
-// Útil para detectar a URL real quando dentro de um iframe.
+// GetTop returns top.location.href as *url.URL.
+// Useful for detecting the real URL when inside an iframe.
 func GetTop() (*url.URL, error) {
 	href := jsGlobal.Get("top").Get("location").Get("href").String()
 	return url.Parse(href)

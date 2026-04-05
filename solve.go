@@ -9,10 +9,10 @@ import (
 	"strings"
 )
 
-// ── Acesso a campos e índices ─────────────────────────────────────────────────
+// ── Field and index access ──────────────────────────────────────────────────
 
-// getField retorna o valor do campo key de obj.
-// Suporta map[string]any, outros maps com chave string e structs via reflection.
+// getField returns the value of field key from obj.
+// Supports map[string]any, other maps with string keys, and structs via reflection.
 func getField(obj any, key string) any {
 	if obj == nil {
 		return nil
@@ -46,8 +46,8 @@ func getField(obj any, key string) any {
 	return nil
 }
 
-// setField atribui val ao campo key de obj (apenas map[string]any).
-// Retorna true se bem-sucedido.
+// setField assigns val to field key of obj (map[string]any only).
+// Returns true if successful.
 func setField(obj any, key string, val any) bool {
 	if m, ok := obj.(map[string]any); ok {
 		m[key] = val
@@ -56,7 +56,7 @@ func setField(obj any, key string, val any) bool {
 	return false
 }
 
-// getAt retorna o elemento do array obj no índice key (int ou string numérica).
+// getAt returns the element of array obj at index key (int or numeric string).
 func getAt(obj any, key any) any {
 	if obj == nil {
 		return nil
@@ -85,7 +85,7 @@ func getAt(obj any, key any) any {
 	return nil
 }
 
-// toInt converte any em int: int, float64, string ou seus equivalentes.
+// toInt converts any to int: int, float64, string or their equivalents.
 func toInt(v any) int {
 	switch x := v.(type) {
 	case int:
@@ -101,7 +101,7 @@ func toInt(v any) int {
 	return 0
 }
 
-// toStr converte any em string para exibição no DOM.
+// toStr converts any to string for DOM display.
 func toStr(v any) string {
 	if v == nil {
 		return ""
@@ -132,9 +132,9 @@ func toStr(v any) string {
 	}
 }
 
-// coerceToType converte a string s para o mesmo tipo de existing.
-// Usado em elementAttrChanged para preservar o tipo original do dado
-// (HTML attributes são sempre strings, mas o mapa de dados pode ter bool, int, etc.).
+// coerceToType converts string s to the same type as existing.
+// Used in elementAttrChanged to preserve the original data type
+// (HTML attributes are always strings, but the data map may have bool, int, etc.).
 func coerceToType(s string, existing any) any {
 	if existing == nil {
 		return s
@@ -165,12 +165,12 @@ func coerceToType(s string, existing any) any {
 	}
 }
 
-// ── Resolução de referências ──────────────────────────────────────────────────
+// ── Reference resolution ────────────────────────────────────────────────────
 
-// solve percorre a árvore de referência e resolve o valor contra ctx.
-// fullCtx é a pilha completa de contextos, usada para resolver sub-expressões
-// (ex.: o índice [fi] em filtered_options[fi]) que podem estar em camadas
-// diferentes de onde o identificador raiz foi encontrado.
+// solve walks the reference tree and resolves the value against ctx.
+// fullCtx is the full context stack, used to resolve sub-expressions
+// (e.g.: the index [fi] in filtered_options[fi]) that may be in different
+// layers from where the root identifier was found.
 func solve(tree []RefNode, ctx any, fullCtx Ctx) any {
 	if tree == nil {
 		return ctx
@@ -192,10 +192,10 @@ func solve(tree []RefNode, ctx any, fullCtx Ctx) any {
 				sym = getField(sym, tree[i].StrVal)
 			}
 		case TokExpr:
-			// Resolve a sub-expressão contra a pilha completa de contextos,
-			// não apenas contra a camada atual. Isso permite que índices de
-			// iteração (ex.: fi, si) sejam encontrados na camada do ndxMap
-			// mesmo quando o array foi encontrado na camada de dados.
+			// Resolve the sub-expression against the full context stack,
+			// not just the current layer. This allows iteration indices
+			// (e.g.: fi, si) to be found in the ndxMap layer even when
+			// the array was found in the data layer.
 			var key any
 			for _, layer := range fullCtx {
 				key = solve(tree[i].Sub, layer, fullCtx)
@@ -210,9 +210,9 @@ func solve(tree []RefNode, ctx any, fullCtx Ctx) any {
 	return sym
 }
 
-// solveAll percorre todos os segmentos, resolve referências e concatena.
-// Busca em ctx (pilha de contextos) até encontrar um valor não-nil.
-// Equivale ao solveAll() do JS original.
+// solveAll walks all segments, resolves references and concatenates.
+// Searches in ctx (context stack) until a non-nil value is found.
+// Equivalent to the solveAll() from the original JS.
 func solveAll(segs []TextSegment, ctx Ctx) string {
 	var sb strings.Builder
 
@@ -221,7 +221,7 @@ func solveAll(segs []TextSegment, ctx Ctx) string {
 			sb.WriteString(segs[i].Lit)
 			continue
 		}
-		// Busca na pilha de contextos
+		// Search in the context stack
 		var val any
 		for j := range ctx {
 			val = solve(segs[i].Ref, ctx[j], ctx)
@@ -235,9 +235,9 @@ func solveAll(segs []TextSegment, ctx Ctx) string {
 	return sb.String()
 }
 
-// isPureReference retorna true se a árvore não contém literais (str/num/txt),
-// ou seja, é um caminho puro de identifiers/expr (útil para two-way binding).
-// Equivale ao isPureReference() do JS original.
+// isPureReference returns true if the tree contains no literals (str/num/txt),
+// i.e., it is a pure path of identifiers/expr (useful for two-way binding).
+// Equivalent to the isPureReference() from the original JS.
 func isPureReference(tree []RefNode) bool {
 	for i := range tree {
 		switch tree[i].Type {
@@ -248,7 +248,7 @@ func isPureReference(tree []RefNode) bool {
 	return true
 }
 
-// isPureSegs retorna true se há exatamente um segmento IsRef com referência pura.
+// isPureSegs returns true if there is exactly one IsRef segment with a pure reference.
 func isPureSegs(segs []TextSegment) bool {
 	if len(segs) != 1 || !segs[0].IsRef {
 		return false
@@ -256,11 +256,11 @@ func isPureSegs(segs []TextSegment) bool {
 	return isPureReference(segs[0].Ref)
 }
 
-// ── Resolução para atribuição (two-way binding) ───────────────────────────────
+// ── Resolution for assignment (two-way binding) ─────────────────────────────
 
-// refOf encontra o par (container, chave) para atribuição via two-way binding.
-// Retorna (nil, "") se não encontrado.
-// Equivale ao refOf() do JS original.
+// refOf finds the (container, key) pair for assignment via two-way binding.
+// Returns (nil, "") if not found.
+// Equivalent to the refOf() from the original JS.
 func refOf(tree []RefNode, ctx Ctx) (container any, key string) {
 	if len(tree) == 0 || len(ctx) == 0 {
 		return nil, ""
@@ -275,7 +275,7 @@ func refOf(tree []RefNode, ctx Ctx) (container any, key string) {
 		if nextKey != nil {
 			sym = getField(sym, toStr(nextKey))
 			if sym == nil {
-				// Tenta outros contextos da pilha
+				// Try other contexts in the stack
 				for j := 1; j < len(ctx); j++ {
 					sub, k := refOf(tree[i:], ctx[j:])
 					if sub != nil && k != "" {

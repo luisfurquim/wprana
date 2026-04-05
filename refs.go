@@ -7,24 +7,24 @@ import (
 	"syscall/js"
 )
 
-// ── Extração de referências do DOM ────────────────────────────────────────────
+// ── DOM reference extraction ────────────────────────────────────────────────
 
-// getReferences percorre a subárvore DOM iniciada em model, extrai todos os
-// bindings de template e devolve o DOMRefNode correspondente.
-// Equivale ao getReferences() do JS original.
+// getReferences walks the DOM subtree starting at model, extracts all
+// template bindings, and returns the corresponding DOMRefNode.
+// Equivalent to the getReferences() from the original JS.
 //
-// model      - nó DOM a processar
-// domParent  - pai DOM do model (para nós condicionais)
-// modelRoot  - raiz do template (para getReferences recursivo)
+//	model      - DOM node to process
+//	domParent  - DOM parent of model (for conditional nodes)
+//	modelRoot  - template root (for recursive getReferences)
 func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMRefNode {
 	nt := nodeType(model)
 
-	// ── Nó de texto ──────────────────────────────────────────────────────────
+	// ── Text node ───────────────────────────────────────────────────────────
 	if nt == jsNodeText {
 		data := model.Get("data").String()
 		segs, err := parseText(data)
 		if err != nil {
-			G.Logf(1, "getReferences: parseText erro no nó de texto: %v\n", err)
+			G.Logf(1, "getReferences: parseText error on text node: %v\n", err)
 			return nil
 		}
 		if !hasRef(segs) {
@@ -36,12 +36,12 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		}
 	}
 
-	// Só processa nós Element
+	// Only process Element nodes
 	if nt != jsNodeElement {
 		return nil
 	}
 
-	// ── Nó elemento ──────────────────────────────────────────────────────────
+	// ── Element node ────────────────────────────────────────────────────────
 	tree := &DOMRefNode{
 		Type:     TokAttr,
 		Attrs:    map[string]*AttrBinding{},
@@ -53,8 +53,8 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 	var noSpan bool
 	var cond, condOp, condVal string
 
-	// Coleta atributos num slice para poder remover durante iteração sem
-	// invalidar índices (o DOM muda quando removemos attrs).
+	// Collect attributes into a slice so we can remove during iteration
+	// without invalidating indices (the DOM changes when we remove attrs).
 	type attrEntry struct{ name, value string }
 	var attrEntries []attrEntry
 	nAttrs := attrLen(model)
@@ -66,7 +66,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 	for _, ae := range attrEntries {
 		name, value := ae.name, ae.value
 
-		// ── Atributo de iteração de array: * ou ** ───────────────────────
+		// ── Array iteration attribute: * or ** ──────────────────────────
 		if strings.HasPrefix(name, "*") {
 			if strings.HasPrefix(name, "**") {
 				arrayVar = name[2:]
@@ -86,35 +86,35 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 			continue
 		}
 
-		// ── Atributo condicional: ? ──────────────────────────────────────
-		// Formas suportadas:
-		//   ?cond          → truthy (booleano)
-		//   ?!cond         → not (truthy (booleano))
-		//   ?cond="val"    → igualdade (cond == "val")
-		//   ?cond!="val"   → desigualdade (cond != "val")
+		// ── Conditional attribute: ? ────────────────────────────────────
+		// Supported forms:
+		//   ?cond          -> truthy (boolean)
+		//   ?!cond         -> not (truthy (boolean))
+		//   ?cond="val"    -> equality (cond == "val")
+		//   ?cond!="val"   -> inequality (cond != "val")
 		if strings.HasPrefix(name, "?") {
 			condName := name[1:]
 			if strings.HasSuffix(condName, "!") && value != "" {
-				// ?cond!="val" → o browser entrega name="?cond!" value="val"
+				// ?cond!="val" -> the browser delivers name="?cond!" value="val"
 				cond = condName[:len(condName)-1]
 				condOp = "neq"
 				condVal = value
 			} else if value != "" {
-				// ?cond="val" → o browser entrega name="?cond" value="val"
+				// ?cond="val" -> the browser delivers name="?cond" value="val"
 				cond = condName
 				condOp = "eq"
 				condVal = value
 			} else if strings.HasPrefix(condName, "!") {
-				// Não aceita ?!, precisa de um identificador de pelo menos 1 caractere
+				// Does not accept ?! alone, needs an identifier of at least 1 character
 				if len(condName) <= 1 {
 					return nil
 				}
-				// ?cond → booleano (!truthiness)
+				// ?!cond -> boolean (not truthiness)
 				cond = condName[1:]
 				condOp = "!"
 				condVal = ""
 			} else {
-				// ?cond → booleano (truthiness)
+				// ?cond -> boolean (truthiness)
 				cond = condName
 				condOp = ""
 				condVal = ""
@@ -124,30 +124,30 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 			continue
 		}
 
-		// ── Atributo de forceSync: & ─────────────────────────────────────
+		// ── ForceSync attribute: & ──────────────────────────────────────
 		var attName string
 		var forceSync bool
 		if strings.HasPrefix(name, "&") {
 			attName = name[1:]
 			forceSync = true
-			// Renomeia o atributo: remove & e recoloca sem ele
+			// Rename the attribute: remove & and set it back without it
 			model.Call("removeAttribute", name)
 			model.Call("setAttribute", attName, value)
 		} else {
 			attName = name
-			// Ignora atributos de evento (@) a nível de binding - tratados no elemento
+			// Ignore event attributes (@) at binding level - handled on the element
 			if strings.HasPrefix(attName, "@") {
 				continue
 			}
 			forceSync = false
 		}
 
-		// Obtém o valor do atributo (pode ter mudado após renomeação)
+		// Get the attribute value (may have changed after renaming)
 		curVal := attrVal(model, attName)
 
 		segs, err := parseText(curVal)
 		if err != nil {
-			G.Logf(1, "getReferences: parseText erro em attr %q: %v\n", attName, err)
+			G.Logf(1, "getReferences: parseText error on attr %q: %v\n", attName, err)
 			continue
 		}
 		if !hasRef(segs) {
@@ -166,7 +166,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		found = true
 	}
 
-	// ── Configura condicional ─────────────────────────────────────────────────
+	// ── Set up conditional ──────────────────────────────────────────────────
 	if cond != "" {
 		tree.Cond = cond
 		tree.CondOp = condOp
@@ -174,17 +174,17 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		condToks := tokenize(cond)
 		condTree, err := parseReference(&condToks)
 		if err != nil {
-			G.Logf(1, "getReferences: parseReference para cond %q: %v\n", cond, err)
+			G.Logf(1, "getReferences: parseReference for cond %q: %v\n", cond, err)
 		} else {
 			tree.CondTree = condTree
 		}
 
-		// Guarda referência ao parent para restaurar o nó quando cond=false
+		// Store reference to parent for restoring the node when cond=false
 		_, st := getOrCreateState(model)
 		st.CondDaddy = domParent
 	}
 
-	// ── Configura iteração de array ───────────────────────────────────────────
+	// ── Set up array iteration ──────────────────────────────────────────────
 	if arrayVar != "" {
 		tree.ArrayVar = arrayVar
 		tree.ArrayIdx = arrayIdx
@@ -193,15 +193,15 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		arrToks := tokenize(arrayVar)
 		arrTree, err := parseReference(&arrToks)
 		if err != nil {
-			G.Logf(1, "getReferences: parseReference para arrayVar %q: %v\n", arrayVar, err)
+			G.Logf(1, "getReferences: parseReference for arrayVar %q: %v\n", arrayVar, err)
 		}
 
 		if noSpan {
-			// ** : o próprio elemento é o container;
-			// seu primeiro filho-elemento é o template/model.
+			// ** : the element itself is the container;
+			// its first child element is the template/model.
 			firstChild := model.Get("firstElementChild")
 
-			// Extrai referências do template ANTES de removê-lo do DOM
+			// Extract references from the template BEFORE removing it from the DOM
 			tree.ModelRef = getReferences(firstChild, model, modelRoot)
 
 			_, pst := getOrCreateState(model)
@@ -210,10 +210,10 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 			pst.AIndex = arrayIdx
 			pst.Tree = arrTree
 
-			// Remove o template do DOM vivo (fica guardado em pst.Model)
+			// Remove the template from the live DOM (stored in pst.Model)
 			model.Call("removeChild", firstChild)
 		} else {
-			// * : plug substitui model; model vira plug.model
+			// * : plug replaces model; model becomes plug.model
 			plug := plugElement(model)
 			_, pst := getOrCreateState(plug)
 			pst.Model = model
@@ -226,7 +226,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		}
 	}
 
-	// ── Percorre filhos ───────────────────────────────────────────────────────
+	// ── Walk children ───────────────────────────────────────────────────────
 	childNodes := model.Get("childNodes")
 	nChildren := childNodes.Get("length").Int()
 	for i := 0; i < nChildren; i++ {
@@ -244,7 +244,7 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 	return tree
 }
 
-// plugElement cria o elemento placeholder (SPAN ou SVG g) para iteração.
+// plugElement creates the placeholder element (SPAN or SVG g) for iteration.
 func plugElement(model js.Value) js.Value {
 	if isInSVG(model) {
 		return domCreateElementNS(jsSVGNS, "g")
@@ -252,11 +252,11 @@ func plugElement(model js.Value) js.Value {
 	return domCreateSpan()
 }
 
-// ── Setup de binding bidirecional ─────────────────────────────────────────────
+// ── Two-way binding setup ───────────────────────────────────────────────────
 
-// setupTwoWayBinding instala um handler onchange que sincroniza o valor do
-// input/select/textarea de volta para o modelo de dados.
-// O ctxPtr aponta para uma variável Ctx atualizada a cada sync.
+// setupTwoWayBinding installs an onchange handler that syncs the value of
+// the input/select/textarea back to the data model.
+// The ctxPtr points to a Ctx variable updated on each sync.
 func setupTwoWayBinding(dom js.Value, pureRef []RefNode, state *PranaState, ctxPtr *Ctx) *TwoWayBinding {
 	twb := &TwoWayBinding{
 		Ref:    pureRef,
@@ -274,11 +274,11 @@ func setupTwoWayBinding(dom js.Value, pureRef []RefNode, state *PranaState, ctxP
 		ctx := *twb.CtxPtr
 		container, key := refOf(twb.Ref, ctx)
 		if container != nil && key != "" {
-			// Coerce o valor string do DOM para o tipo registrado no mapa de dados,
-			// garantindo que bool/int/float não sejam corrompidos para string.
+			// Coerce the DOM string value to the type registered in the data map,
+			// ensuring that bool/int/float are not corrupted to string.
 			typedVal := coerceToType(newVal, getField(container, key))
 			if setField(container, key, typedVal) {
-				G.Logf(4, "setupTwoWayBinding: atualizado %q = %q\n", key, newVal)
+				G.Logf(4, "setupTwoWayBinding: updated %q = %q\n", key, newVal)
 				if state != nil {
 					state.syncLocal(nil)
 				}
@@ -292,8 +292,8 @@ func setupTwoWayBinding(dom js.Value, pureRef []RefNode, state *PranaState, ctxP
 	return twb
 }
 
-// releaseTwoWayBindings libera os js.Func de todos os TwoWayBindings de um nó.
-// Deve ser chamado quando o elemento for desconectado.
+// releaseTwoWayBindings releases the js.Func of all TwoWayBindings of a node.
+// Must be called when the element is disconnected.
 func releaseTwoWayBindings(nodeID int64) {
 	st, ok := nodeRegistry[nodeID]
 	if !ok || st.TwoWay == nil {

@@ -1,11 +1,11 @@
 //go:build js && wasm
 
-// Package mywidget demonstra como implementar um web component Go usando wprana.
+// Package mywidget demonstrates how to implement a Go web component using wprana.
 //
-// Estrutura de um módulo wprana:
-//   - mywidget.html   → template HTML com bindings {{expr}}, *arr, ?cond, &attr
-//   - mywidget.css    → estilos do componente
-//   - mywidget.go     → lógica Go: init() registra, MyWidget implementa PranaMod
+// Structure of a wprana module:
+//   - mywidget.html   → HTML template with bindings {{expr}}, *arr, ?cond, &attr
+//   - mywidget.css    → component styles
+//   - mywidget.go     → Go logic: init() registers, MyWidget implements PranaMod
 package mywidget
 
 import (
@@ -15,7 +15,7 @@ import (
 	"github.com/luisfurquim/wprana"
 )
 
-// G é o logger deste módulo.
+// G is the logger for this module.
 var G goose.Alert
 
 //go:embed mywidget.html
@@ -24,16 +24,16 @@ var htmlContent string
 //go:embed mywidget.css
 var cssContent string
 
-// Item é um elemento da lista.
+// Item is a list element.
 type Item struct {
 	Label string
 }
 
-// MyWidget implementa PranaMod para o custom element <my-widget>.
+// MyWidget implements PranaMod for the <my-widget> custom element.
 type MyWidget struct{}
 
-// init registra o módulo. Equivale ao function main(ready) do JS original:
-// executa uma vez no carregamento do pacote.
+// init registers the module. Equivalent to the original JS function main(ready):
+// runs once when the package is loaded.
 func init() {
 	G.Set(4)
 	wprana.Register(
@@ -41,14 +41,14 @@ func init() {
 		htmlContent,
 		cssContent,
 		func() wprana.PranaMod { return &MyWidget{} },
-		// atributos observados (equivalente a observedAttributes no JS):
+		// observed attributes (equivalent to observedAttributes in JS):
 		"title",
 	)
-	G.Printf(2, "mywidget: módulo registrado\n")
+	G.Printf(2, "mywidget: module registered\n")
 }
 
-// InitData retorna o estado inicial do componente.
-// Equivale ao "return {...}" do function main(ready) no JS original.
+// InitData returns the initial state of the component.
+// Equivalent to the "return {...}" in the original JS function main(ready).
 func (w *MyWidget) InitData() map[string]any {
 	return map[string]any{
 		"title":     "Meu Widget",
@@ -60,25 +60,25 @@ func (w *MyWidget) InitData() map[string]any {
 	}
 }
 
-// Render é chamado após o componente ser conectado ao DOM e os dados
-// iniciais estarem disponíveis. Equivale ao ready.then(function(obj){...})
-// do JS original.
+// Render is called after the component is connected to the DOM and the
+// initial data is available. Equivalent to ready.then(function(obj){...})
+// in the original JS.
 //
-// obj.This   → *wprana.ReactiveData  (use Set/Get/Delete/Append/DeleteAt)
-// obj.Dom    → js.Value (SPAN na shadow root)
-// obj.Element → js.Value (o custom element em si)
+// obj.This    → *wprana.ReactiveData  (use Set/Get/Delete/Append/DeleteAt)
+// obj.Dom     → js.Value (SPAN in the shadow root)
+// obj.Element → js.Value (the custom element itself)
 // obj.Trigger → func(eventName string, args ...any)
 func (w *MyWidget) Render(obj *wprana.PranaObj) {
-	G.Printf(2, "mywidget: Render chamado\n")
+	G.Printf(2, "mywidget: Render called\n")
 
-	// Inicializa com alguns itens
+	// Initialize with some items
 	obj.This.Set("items", []any{
 		map[string]any{"label": "Item Alpha"},
 		map[string]any{"label": "Item Beta"},
 		map[string]any{"label": "Item Gamma"},
 	})
 
-	// Incrementa contador a cada 2 segundos como demonstração
+	// Increment counter every 2 seconds as a demonstration
 	go func() {
 		for {
 			done := make(chan struct{})
@@ -94,7 +94,7 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
 		}
 	}()
 
-	// Lê o valor do input à medida que muda (two-way binding já cuida disso,
-	// mas aqui mostramos como reagir a mudanças via polling do modelo)
-	G.Printf(3, "mywidget: Render concluído\n")
+	// Read the input value as it changes (two-way binding already handles this,
+	// but here we show how to react to changes via model polling)
+	G.Printf(3, "mywidget: Render completed\n")
 }

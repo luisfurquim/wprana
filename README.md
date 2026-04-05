@@ -385,7 +385,7 @@ This fires the browser's `hashchange` event, which in turn updates every
 ### Conditional Rendering
 
 Use the `?` prefix on an attribute to conditionally show or hide an element.
-Three forms are supported:
+Four forms are supported:
 
 #### Boolean (truthiness)
 
@@ -398,6 +398,23 @@ Three forms are supported:
 <!-- Shows only when items array has elements -->
 <div ?items.length>
     <p>There are items!</p>
+</div>
+```
+
+#### Negated Boolean (`?!var`)
+
+Shows the element only when the variable is **falsy** (the logical negation of
+the truthiness check):
+
+```html
+<!-- Shows only when is_loading is falsy -->
+<div ?!is_loading>
+    <p>Content has loaded.</p>
+</div>
+
+<!-- Shows only when items array is empty -->
+<div ?!items.length>
+    <p>No items found.</p>
 </div>
 ```
 
@@ -440,6 +457,7 @@ The browser parses these forms naturally — no special escaping is needed:
 | Template syntax | HTML attr name | HTML attr value | Operator |
 |---|---|---|---|
 | `?cond` | `?cond` | *(empty)* | truthy |
+| `?!cond` | `?!cond` | *(empty)* | negated truthy |
 | `?cond="abc"` | `?cond` | `abc` | equality |
 | `?cond!="abc"` | `?cond!` | `abc` | inequality |
 
@@ -1194,6 +1212,7 @@ data map -> calls the function.
 | `{{ }}` | Binding | `{{user.name}}` | Display a data value. Updates automatically on change. |
 | `{{#}}` | Hash | `{{#}}` | Current URL hash fragment. Updates on `hashchange`. |
 | `?` | Conditional | `?is_admin` | Show/hide element based on truthiness. |
+| `?!` | Negated | `?!is_loading` | Show element only when value is **falsy**. |
 | `?="val"` | Equality | `?status="active"` | Show element only when value equals `"val"`. |
 | `?!="val"` | Inequality | `?status!="deleted"` | Show element only when value does **not** equal `"val"`. |
 | `*` | Iteration | `*items:i` | Repeat element for each array item (wrapped in `<span>`). |

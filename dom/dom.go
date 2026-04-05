@@ -7,23 +7,23 @@ import "syscall/js"
 
 // ── Event helpers ────────────────────────────────────────────────────────────
 
-// eventEntry guarda os dados necessários para remover um event listener.
+// eventEntry holds the data needed to remove an event listener.
 type eventEntry struct {
 	target    js.Value
 	eventName string
 	fn        js.Func
 }
 
-// eventRegistry mapeia IDs de handlers registrados via AddEvent.
+// eventRegistry maps IDs of handlers registered via AddEvent.
 var (
-	eventRegistry = map[int64]*eventEntry{}
+	eventRegistry       = map[int64]*eventEntry{}
 	nextEventID   int64 = 1
 )
 
-// AddEvent registra um event listener no elemento dom para o evento eventName.
-// Se preventDefault for true, chama event.preventDefault() antes do handler.
-// Se stopPropagation for true, chama event.stopPropagation() antes do handler.
-// Retorna um ID que pode ser passado a RmEvent para remover o listener.
+// AddEvent registers an event listener on the DOM element for the given eventName.
+// If preventDefault is true, calls event.preventDefault() before the handler.
+// If stopPropagation is true, calls event.stopPropagation() before the handler.
+// Returns an ID that can be passed to RmEvent to remove the listener.
 func AddEvent(dom js.Value, eventName string, handler func(this js.Value, args []js.Value) any, preventDefault, stopPropagation bool) int64 {
 	wrapped := js.FuncOf(func(this js.Value, args []js.Value) any {
 		if len(args) > 0 {
@@ -49,7 +49,7 @@ func AddEvent(dom js.Value, eventName string, handler func(this js.Value, args [
 	return id
 }
 
-// RmEvent remove o event listener registrado com o ID retornado por AddEvent.
+// RmEvent removes the event listener registered with the ID returned by AddEvent.
 func RmEvent(id int64) {
 	entry, ok := eventRegistry[id]
 	if !ok {
@@ -62,8 +62,8 @@ func RmEvent(id int64) {
 
 // ── Query helper ─────────────────────────────────────────────────────────────
 
-// Query executa querySelectorAll no elemento dom e retorna os resultados
-// como um slice de js.Value.
+// Query runs querySelectorAll on the DOM element and returns the results
+// as a slice of js.Value.
 func Query(dom js.Value, selector string) []js.Value {
 	nodeList := dom.Call("querySelectorAll", selector)
 	n := nodeList.Get("length").Int()

@@ -57,7 +57,7 @@ import (
 
 const elementTag = "wp-combobox"
 
-// G é o logger deste módulo.
+// G is the logger for this module.
 var G goose.Alert
 
 //go:embed combobox.html
@@ -69,13 +69,13 @@ var varsCSS string
 //go:embed design.css
 var designCSS string
 
-// cssParts mantém as seções de CSS; compartilhado por todas as instâncias.
+// cssParts holds the CSS sections; shared by all instances.
 var cssParts = []wprana.CSSPart{
 	{Name: "Vars", Content: ""},
 	{Name: "Design", Content: ""},
 }
 
-// buildCSS concatena todas as partes de CSS na ordem definida.
+// buildCSS concatenates all CSS parts in the defined order.
 func buildCSS() string {
 	var sb strings.Builder
 	for _, p := range cssParts {
@@ -85,9 +85,9 @@ func buildCSS() string {
 	return sb.String()
 }
 
-// New cria uma nova instância de Combobox.
-// Exportada para que aplicações possam chamar ListCSS/ReplaceCSS
-// sem precisar esperar pelo factory.
+// New creates a new Combobox instance.
+// Exported so that applications can call ListCSS/ReplaceCSS
+// without waiting for the factory.
 func New() *Combobox {
 	return &Combobox{}
 }
@@ -103,7 +103,7 @@ func init() {
 		func() wprana.PranaMod { return &Combobox{} },
 		"options", "placeholder",
 	)
-	G.Logf(3, "wp-combobox: módulo registrado\n")
+	G.Logf(3, "wp-combobox: module registered\n")
 }
 
 // Combobox implements wprana.PranaMod and wprana.Customizable
@@ -131,7 +131,7 @@ func (c *Combobox) ReplaceCSS(key string, content string) {
 			return
 		}
 	}
-	G.Logf(1, "ReplaceCSS: chave %q não encontrada\n", key)
+	G.Logf(1, "ReplaceCSS: key %q not found\n", key)
 }
 
 func (c *Combobox) InitData() map[string]any {
@@ -405,8 +405,8 @@ func (c *Combobox) Render(obj *wprana.PranaObj) {
 	// -------------------------------------------------------------------------
 	dom.AddEvent(roots[0], "click", func(_ js.Value, args []js.Value) any {
 		var event js.Value = args[0]
-		// Impede que o click dentro do combobox chegue ao document handler
-		// que fecharia o dropdown.
+		// Prevent clicks inside the combobox from reaching the document handler
+		// that would close the dropdown.
 		event.Call("stopPropagation")
 		var el js.Value = event.Get("target")
 		for !el.IsNull() && !el.IsUndefined() {
