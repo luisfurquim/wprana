@@ -49,10 +49,6 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 	}
 	found := false
 
-	var arrayVar, arrayIdx string
-	var noSpan bool
-	var cond, condOp, condVal string
-
 	// Collect attributes into a slice so we can remove during iteration
 	// without invalidating indices (the DOM changes when we remove attrs).
 	type attrEntry struct{ name, value string }
@@ -63,167 +59,45 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		attrEntries = append(attrEntries, attrEntry{n, v})
 	}
 
+	var arrayVar, arrayIdx string
+	var noSpan bool
+	var cond, condOp, condVal string
+
 	for _, ae := range attrEntries {
 		name, value := ae.name, ae.value
 
-		// ── Array iteration attribute: * or ** ──────────────────────────
-		if strings.HasPrefix(name, "*") {
-			if strings.HasPrefix(name, "**") {
-				arrayVar = name[2:]
-				noSpan = true
-				model.Call("removeAttribute", name)
-			} else {
-				arrayVar = name[1:]
-				noSpan = false
-				model.Call("removeAttribute", name)
-			}
-			parts := strings.SplitN(arrayVar, ":", 2)
-			if len(parts) == 2 {
-				arrayIdx = parts[1]
-				arrayVar = parts[0]
+		switch {
+		case strings.HasPrefix(name, "*"):
+			arrayVar, arrayIdx, noSpan = refExtractArray(model, name)
+			found = true
+
+		case strings.HasPrefix(name, "?"):
+			var bail bool
+			cond, condOp, condVal, bail = refExtractCond(model, name, value)
+			if bail {
+				return nil
 			}
 			found = true
-			continue
-		}
 
-		// ── Conditional attribute: ? ────────────────────────────────────
-		// Supported forms:
-		//   ?cond          -> truthy (boolean)
-		//   ?!cond         -> not (truthy (boolean))
-		//   ?cond="val"    -> equality (cond == "val")
-		//   ?cond!="val"   -> inequality (cond != "val")
-		if strings.HasPrefix(name, "?") {
-			condName := name[1:]
-			if strings.HasSuffix(condName, "!") && value != "" {
-				// ?cond!="val" -> the browser delivers name="?cond!" value="val"
-				cond = condName[:len(condName)-1]
-				condOp = "neq"
-				condVal = value
-			} else if value != "" {
-				// ?cond="val" -> the browser delivers name="?cond" value="val"
-				cond = condName
-				condOp = "eq"
-				condVal = value
-			} else if strings.HasPrefix(condName, "!") {
-				// Does not accept ?! alone, needs an identifier of at least 1 character
-				if len(condName) <= 1 {
-					return nil
-				}
-				// ?!cond -> boolean (not truthiness)
-				cond = condName[1:]
-				condOp = "!"
-				condVal = ""
-			} else {
-				// ?cond -> boolean (truthiness)
-				cond = condName
-				condOp = ""
-				condVal = ""
+		case strings.HasPrefix(name, "@"):
+			// Event attributes are handled on the element, not at binding level.
+			continue
+
+		default:
+			if refExtractBinding(model, tree, name, value) {
+				found = true
 			}
-			model.Call("removeAttribute", name)
-			found = true
-			continue
 		}
-
-		// ── ForceSync attribute: & ──────────────────────────────────────
-		var attName string
-		var forceSync bool
-		if strings.HasPrefix(name, "&") {
-			attName = name[1:]
-			forceSync = true
-			// Rename the attribute: remove & and set it back without it
-			model.Call("removeAttribute", name)
-			model.Call("setAttribute", attName, value)
-		} else {
-			attName = name
-			// Ignore event attributes (@) at binding level - handled on the element
-			if strings.HasPrefix(attName, "@") {
-				continue
-			}
-			forceSync = false
-		}
-
-		// Get the attribute value (may have changed after renaming)
-		curVal := attrVal(model, attName)
-
-		segs, err := parseText(curVal)
-		if err != nil {
-			G.Logf(1, "getReferences: parseText error on attr %q: %v\n", attName, err)
-			continue
-		}
-		if !hasRef(segs) {
-			continue
-		}
-
-		ab := &AttrBinding{
-			Segs:      segs,
-			ForceSync: forceSync,
-		}
-		if isPureSegs(segs) {
-			ab.PureRef = segs[0].Ref
-		}
-
-		tree.Attrs[attName] = ab
-		found = true
 	}
 
 	// ── Set up conditional ──────────────────────────────────────────────────
 	if cond != "" {
-		tree.Cond = cond
-		tree.CondOp = condOp
-		tree.CondVal = condVal
-		condToks := tokenize(cond)
-		condTree, err := parseReference(&condToks)
-		if err != nil {
-			G.Logf(1, "getReferences: parseReference for cond %q: %v\n", cond, err)
-		} else {
-			tree.CondTree = condTree
-		}
-
-		// Store reference to parent for restoring the node when cond=false
-		_, st := getOrCreateState(model)
-		st.CondDaddy = domParent
+		refSetupCond(tree, model, domParent, cond, condOp, condVal)
 	}
 
 	// ── Set up array iteration ──────────────────────────────────────────────
 	if arrayVar != "" {
-		tree.ArrayVar = arrayVar
-		tree.ArrayIdx = arrayIdx
-		tree.NoSpan = noSpan
-
-		arrToks := tokenize(arrayVar)
-		arrTree, err := parseReference(&arrToks)
-		if err != nil {
-			G.Logf(1, "getReferences: parseReference for arrayVar %q: %v\n", arrayVar, err)
-		}
-
-		if noSpan {
-			// ** : the element itself is the container;
-			// its first child element is the template/model.
-			firstChild := model.Get("firstElementChild")
-
-			// Extract references from the template BEFORE removing it from the DOM
-			tree.ModelRef = getReferences(firstChild, model, modelRoot)
-
-			_, pst := getOrCreateState(model)
-			pst.Model = firstChild
-			pst.ACtrl = arrayVar
-			pst.AIndex = arrayIdx
-			pst.Tree = arrTree
-
-			// Remove the template from the live DOM (stored in pst.Model)
-			model.Call("removeChild", firstChild)
-		} else {
-			// * : plug replaces model; model becomes plug.model
-			plug := plugElement(model)
-			_, pst := getOrCreateState(plug)
-			pst.Model = model
-			pst.ACtrl = arrayVar
-			pst.AIndex = arrayIdx
-			pst.Tree = arrTree
-
-			parent := model.Get("parentNode")
-			parent.Call("replaceChild", plug, model)
-		}
+		refSetupArray(tree, model, modelRoot, arrayVar, arrayIdx, noSpan)
 	}
 
 	// ── Walk children ───────────────────────────────────────────────────────
@@ -242,6 +116,159 @@ func getReferences(model js.Value, domParent js.Value, modelRoot js.Value) *DOMR
 		return nil
 	}
 	return tree
+}
+
+// refExtractArray processes a * or ** attribute, removes it from the model,
+// and returns the parsed arrayVar, arrayIdx, and noSpan flag.
+func refExtractArray(model js.Value, name string) (arrayVar, arrayIdx string, noSpan bool) {
+	if strings.HasPrefix(name, "**") {
+		arrayVar = name[2:]
+		noSpan = true
+	} else {
+		arrayVar = name[1:]
+		noSpan = false
+	}
+	model.Call("removeAttribute", name)
+	parts := strings.SplitN(arrayVar, ":", 2)
+	if len(parts) == 2 {
+		arrayIdx = parts[1]
+		arrayVar = parts[0]
+	}
+	return
+}
+
+// refExtractCond processes a ? attribute and returns cond, condOp, condVal.
+// bail is true when the attribute is malformed and the caller should return nil.
+func refExtractCond(model js.Value, name, value string) (cond, condOp, condVal string, bail bool) {
+	condName := name[1:]
+	switch {
+	case strings.HasSuffix(condName, "!") && value != "":
+		// ?cond!="val" -> the browser delivers name="?cond!" value="val"
+		cond = condName[:len(condName)-1]
+		condOp = "neq"
+		condVal = value
+	case value != "":
+		// ?cond="val" -> the browser delivers name="?cond" value="val"
+		cond = condName
+		condOp = "eq"
+		condVal = value
+	case strings.HasPrefix(condName, "!"):
+		// Does not accept ?! alone, needs an identifier of at least 1 character
+		if len(condName) <= 1 {
+			bail = true
+			return
+		}
+		// ?!cond -> boolean (not truthiness)
+		cond = condName[1:]
+		condOp = "!"
+	default:
+		// ?cond -> boolean (truthiness)
+		cond = condName
+	}
+	model.Call("removeAttribute", name)
+	return
+}
+
+// refExtractBinding processes a regular or & attribute and, if it contains
+// template references, adds it to tree.Attrs. Returns true if a binding was found.
+func refExtractBinding(model js.Value, tree *DOMRefNode, name, value string) bool {
+	var attName string
+	var forceSync bool
+	if strings.HasPrefix(name, "&") {
+		attName = name[1:]
+		forceSync = true
+		// Rename the attribute: remove & and set it back without it
+		model.Call("removeAttribute", name)
+		model.Call("setAttribute", attName, value)
+	} else {
+		attName = name
+		forceSync = false
+	}
+
+	// Get the attribute value (may have changed after renaming)
+	curVal := attrVal(model, attName)
+
+	segs, err := parseText(curVal)
+	if err != nil {
+		G.Logf(1, "getReferences: parseText error on attr %q: %v\n", attName, err)
+		return false
+	}
+	if !hasRef(segs) {
+		return false
+	}
+
+	ab := &AttrBinding{
+		Segs:      segs,
+		ForceSync: forceSync,
+	}
+	if isPureSegs(segs) {
+		ab.PureRef = segs[0].Ref
+	}
+
+	tree.Attrs[attName] = ab
+	return true
+}
+
+// refSetupCond configures the conditional fields on tree and stores the
+// parent reference in the node state.
+func refSetupCond(tree *DOMRefNode, model, domParent js.Value, cond, condOp, condVal string) {
+	tree.Cond = cond
+	tree.CondOp = condOp
+	tree.CondVal = condVal
+	condToks := tokenize(cond)
+	condTree, err := parseReference(&condToks)
+	if err != nil {
+		G.Logf(1, "getReferences: parseReference for cond %q: %v\n", cond, err)
+	} else {
+		tree.CondTree = condTree
+	}
+
+	// Store reference to parent for restoring the node when cond=false
+	_, st := getOrCreateState(model)
+	st.CondDaddy = domParent
+}
+
+// refSetupArray configures the array iteration fields on tree and sets up
+// the DOM structure (plug for *, firstChild extraction for **).
+func refSetupArray(tree *DOMRefNode, model, modelRoot js.Value, arrayVar, arrayIdx string, noSpan bool) {
+	tree.ArrayVar = arrayVar
+	tree.ArrayIdx = arrayIdx
+	tree.NoSpan = noSpan
+
+	arrToks := tokenize(arrayVar)
+	arrTree, err := parseReference(&arrToks)
+	if err != nil {
+		G.Logf(1, "getReferences: parseReference for arrayVar %q: %v\n", arrayVar, err)
+	}
+
+	if noSpan {
+		// ** : the element itself is the container;
+		// its first child element is the template/model.
+		firstChild := model.Get("firstElementChild")
+
+		// Extract references from the template BEFORE removing it from the DOM
+		tree.ModelRef = getReferences(firstChild, model, modelRoot)
+
+		_, pst := getOrCreateState(model)
+		pst.Model = firstChild
+		pst.ACtrl = arrayVar
+		pst.AIndex = arrayIdx
+		pst.Tree = arrTree
+
+		// Remove the template from the live DOM (stored in pst.Model)
+		model.Call("removeChild", firstChild)
+	} else {
+		// * : plug replaces model; model becomes plug.model
+		plug := plugElement(model)
+		_, pst := getOrCreateState(plug)
+		pst.Model = model
+		pst.ACtrl = arrayVar
+		pst.AIndex = arrayIdx
+		pst.Tree = arrTree
+
+		parent := model.Get("parentNode")
+		parent.Call("replaceChild", plug, model)
+	}
 }
 
 // plugElement creates the placeholder element (SPAN or SVG g) for iteration.

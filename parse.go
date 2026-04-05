@@ -109,8 +109,60 @@ func splitStrings(s string) []preToken {
 	return result
 }
 
+// isWhitespace returns true for space, tab, newline, carriage return.
+func isWhitespace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
+
+// isIdentStart returns true for characters that can start an identifier.
+func isIdentStart(c byte) bool {
+	return c == '_' || c == '$' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// isIdentChar returns true for characters that can appear inside an identifier.
+func isIdentChar(c byte) bool {
+	return isIdentStart(c) || (c >= '0' && c <= '9')
+}
+
+// consumeNumber reads a number (with optional sign and decimal part) from s
+// starting at position i. Returns the RefNode and the new position.
+func consumeNumber(s string, i int) (RefNode, int) {
+	n := len(s)
+	j := i
+	if s[j] == '+' || s[j] == '-' {
+		j++
+	}
+	for j < n && s[j] >= '0' && s[j] <= '9' {
+		j++
+	}
+	// decimal part (we only store the integer part via parseInt)
+	if j < n && s[j] == '.' {
+		j++
+		for j < n && s[j] >= '0' && s[j] <= '9' {
+			j++
+		}
+	}
+	// parseInt replicates the JS behavior (truncates fraction)
+	intStr := s[i:j]
+	if idx := indexByte(intStr, '.'); idx >= 0 {
+		intStr = intStr[:idx]
+	}
+	val, _ := strconv.Atoi(intStr)
+	return RefNode{Type: TokNum, IntVal: val}, j
+}
+
+// consumeIdent reads an identifier from s starting at position i.
+// Returns the RefNode and the new position.
+func consumeIdent(s string, i int) (RefNode, int) {
+	j := i + 1
+	for j < len(s) && isIdentChar(s[j]) {
+		j++
+	}
+	return RefNode{Type: TokIdent, StrVal: s[i:j]}, j
+}
+
 // splitSymbols tokenizes a code fragment without string literals.
-// Recognizes: `.`, `[`, `]`, numbers, identifiers.
+// Recognizes: `.`, `[`, `]`, `#`, numbers, identifiers.
 func splitSymbols(s string) []RefNode {
 	var toks []RefNode
 	i := 0
@@ -119,8 +171,7 @@ func splitSymbols(s string) []RefNode {
 	for i < n {
 		c := s[i]
 
-		// Whitespace
-		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+		if isWhitespace(c) {
 			i++
 			continue
 		}
@@ -129,72 +180,31 @@ func splitSymbols(s string) []RefNode {
 		case '.':
 			toks = append(toks, RefNode{Type: TokDot})
 			i++
-			continue
 		case '[':
 			toks = append(toks, RefNode{Type: TokOpen})
 			i++
-			continue
 		case ']':
 			toks = append(toks, RefNode{Type: TokClose})
 			i++
-			continue
-		}
-
-		// Number with optional sign
-		isSign := (c == '+' || c == '-') && i+1 < n && s[i+1] >= '0' && s[i+1] <= '9'
-		isDigit := c >= '0' && c <= '9'
-
-		if isSign || isDigit {
-			j := i
-			if isSign {
-				j++
-			}
-			for j < n && s[j] >= '0' && s[j] <= '9' {
-				j++
-			}
-			// decimal part (we only store the integer part via parseInt)
-			if j < n && s[j] == '.' {
-				j++
-				for j < n && s[j] >= '0' && s[j] <= '9' {
-					j++
-				}
-			}
-			// parseInt replicates the JS behavior (truncates fraction)
-			intStr := s[i:j]
-			if idx := indexByte(intStr, '.'); idx >= 0 {
-				intStr = intStr[:idx]
-			}
-			val, _ := strconv.Atoi(intStr)
-			toks = append(toks, RefNode{Type: TokNum, IntVal: val})
-			i = j
-			continue
-		}
-
-		// Hash fragment shorthand: standalone '#' is a built-in reference
-		if c == '#' {
+		case '#':
 			toks = append(toks, RefNode{Type: TokIdent, StrVal: "#"})
 			i++
-			continue
-		}
-
-		// Identifier: [a-zA-Z_$][0-9a-zA-Z_$]*
-		if c == '_' || c == '$' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
-			j := i + 1
-			for j < n {
-				d := s[j]
-				if d == '_' || d == '$' || (d >= '0' && d <= '9') || (d >= 'a' && d <= 'z') || (d >= 'A' && d <= 'Z') {
-					j++
-				} else {
-					break
-				}
+		default:
+			isSign := (c == '+' || c == '-') && i+1 < n && s[i+1] >= '0' && s[i+1] <= '9'
+			switch {
+			case isSign || (c >= '0' && c <= '9'):
+				var tok RefNode
+				tok, i = consumeNumber(s, i)
+				toks = append(toks, tok)
+			case isIdentStart(c):
+				var tok RefNode
+				tok, i = consumeIdent(s, i)
+				toks = append(toks, tok)
+			default:
+				// Unknown character: skip
+				i++
 			}
-			toks = append(toks, RefNode{Type: TokIdent, StrVal: s[i:j]})
-			i = j
-			continue
 		}
-
-		// Unknown character: skip
-		i++
 	}
 
 	return toks

@@ -9,10 +9,10 @@ package opfs
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"syscall/js"
 
 	"github.com/luisfurquim/wprana"
+	"github.com/luisfurquim/wprana/codec"
 )
 
 // ErrNotFound is returned when the key does not exist in OPFS.
@@ -31,134 +31,7 @@ type Decoder interface {
 
 // ── Default codec ────────────────────────────────────────────────────────────
 
-type defaultCodec struct{}
-
-func (defaultCodec) Encode(inpval any) string {
-	switch v := inpval.(type) {
-	case string:
-		return v
-	case []byte:
-		return string(v)
-	case bool:
-		return strconv.FormatBool(v)
-	case int:
-		return strconv.Itoa(v)
-	case int8:
-		return strconv.FormatInt(int64(v), 10)
-	case int16:
-		return strconv.FormatInt(int64(v), 10)
-	case int32:
-		return strconv.FormatInt(int64(v), 10)
-	case int64:
-		return strconv.FormatInt(v, 10)
-	case uint:
-		return strconv.FormatUint(uint64(v), 10)
-	case uint8:
-		return strconv.FormatUint(uint64(v), 10)
-	case uint16:
-		return strconv.FormatUint(uint64(v), 10)
-	case uint32:
-		return strconv.FormatUint(uint64(v), 10)
-	case uint64:
-		return strconv.FormatUint(v, 10)
-	case float32:
-		return strconv.FormatFloat(float64(v), 'g', -1, 32)
-	case float64:
-		return strconv.FormatFloat(v, 'g', -1, 64)
-	default:
-		return fmt.Sprintf("%v", v)
-	}
-}
-
-func (defaultCodec) Decode(buf string, outval any) error {
-	switch p := outval.(type) {
-	case *string:
-		*p = buf
-	case *[]byte:
-		*p = []byte(buf)
-	case *bool:
-		v, err := strconv.ParseBool(buf)
-		if err != nil {
-			return err
-		}
-		*p = v
-	case *int:
-		v, err := strconv.Atoi(buf)
-		if err != nil {
-			return err
-		}
-		*p = v
-	case *int8:
-		v, err := strconv.ParseInt(buf, 10, 8)
-		if err != nil {
-			return err
-		}
-		*p = int8(v)
-	case *int16:
-		v, err := strconv.ParseInt(buf, 10, 16)
-		if err != nil {
-			return err
-		}
-		*p = int16(v)
-	case *int32:
-		v, err := strconv.ParseInt(buf, 10, 32)
-		if err != nil {
-			return err
-		}
-		*p = int32(v)
-	case *int64:
-		v, err := strconv.ParseInt(buf, 10, 64)
-		if err != nil {
-			return err
-		}
-		*p = v
-	case *uint:
-		v, err := strconv.ParseUint(buf, 10, 64)
-		if err != nil {
-			return err
-		}
-		*p = uint(v)
-	case *uint8:
-		v, err := strconv.ParseUint(buf, 10, 8)
-		if err != nil {
-			return err
-		}
-		*p = uint8(v)
-	case *uint16:
-		v, err := strconv.ParseUint(buf, 10, 16)
-		if err != nil {
-			return err
-		}
-		*p = uint16(v)
-	case *uint32:
-		v, err := strconv.ParseUint(buf, 10, 32)
-		if err != nil {
-			return err
-		}
-		*p = uint32(v)
-	case *uint64:
-		v, err := strconv.ParseUint(buf, 10, 64)
-		if err != nil {
-			return err
-		}
-		*p = v
-	case *float32:
-		v, err := strconv.ParseFloat(buf, 32)
-		if err != nil {
-			return err
-		}
-		*p = float32(v)
-	case *float64:
-		v, err := strconv.ParseFloat(buf, 64)
-		if err != nil {
-			return err
-		}
-		*p = v
-	default:
-		return fmt.Errorf("opfs: unsupported type %T", outval)
-	}
-	return nil
-}
+type defaultCodec = codec.Codec
 
 // ── Promise helper ───────────────────────────────────────────────────────────
 

@@ -188,279 +188,256 @@ func parseOptions(raw string) []any {
 	return []any{}
 }
 
+// cbCtx holds the runtime state shared across all event handlers
+// of a single combobox instance.
+type cbCtx struct {
+	obj          *wprana.PranaObj
+	inp          js.Value
+	dropWrap     js.Value
+	selectedVals map[string]bool
+	lastRaw      string
+}
+
+func (cb *cbCtx) showDrop() {
+	cb.dropWrap.Get("style").Set("display", "block")
+}
+
+func (cb *cbCtx) hideDrop() {
+	cb.dropWrap.Get("style").Set("display", "none")
+}
+
+// applyFilter rebuilds filtered_options from all_options, excluding
+// already-selected values and applying a case-insensitive substring filter.
+func (cb *cbCtx) applyFilter(query string) {
+	query = strings.ToLower(strings.TrimSpace(query))
+	var allOpts []any
+	if v, ok := cb.obj.This.Get("all_options").([]any); ok {
+		allOpts = v
+	}
+	filtered := make([]any, 0, len(allOpts))
+	for _, opt := range allOpts {
+		m, ok := opt.(map[string]any)
+		if !ok {
+			continue
+		}
+		val, ok := m["value"].(string)
+		if !ok {
+			continue
+		}
+		if cb.selectedVals[val] {
+			continue
+		}
+		if query == "" {
+			filtered = append(filtered, m)
+			continue
+		}
+		label, ok := m["label"].(string)
+		if !ok {
+			continue
+		}
+		if strings.Contains(strings.ToLower(label), query) {
+			filtered = append(filtered, m)
+		}
+	}
+	cb.obj.This.Set("filtered_options", filtered)
+}
+
+// loadOptions parses the options attribute (JSON) into all_options.
+// It is a no-op when the raw string has not changed since the last call.
+func (cb *cbCtx) loadOptions() {
+	var raw string
+	if v, ok := cb.obj.This.Get("options").(string); ok {
+		raw = v
+	}
+	if raw == cb.lastRaw {
+		return
+	}
+	cb.lastRaw = raw
+	cb.obj.This.Set("all_options", parseOptions(raw))
+	cb.applyFilter(cb.inputVal())
+}
+
+// inputVal reads the current input_val from the reactive data.
+func (cb *cbCtx) inputVal() string {
+	if v, ok := cb.obj.This.Get("input_val").(string); ok {
+		return v
+	}
+	return ""
+}
+
+// selectItem adds an option to the selection, clears the input, and
+// fires the @change event.
+func (cb *cbCtx) selectItem(m map[string]any) {
+	val, ok := m["value"].(string)
+	if !ok {
+		return
+	}
+	if cb.selectedVals[val] {
+		return
+	}
+	cb.selectedVals[val] = true
+	cb.obj.This.Append("selected_items", m)
+	cb.obj.This.Set("input_val", "")
+	cb.hideDrop()
+	cb.applyFilter("")
+	cb.obj.Trigger("change", cb.obj.This.Get("selected_items"))
+}
+
+// removeItem removes the selected item at index si and fires @change.
+func (cb *cbCtx) removeItem(si int) {
+	selected, ok := cb.obj.This.Get("selected_items").([]any)
+	if !ok {
+		return
+	}
+	if si < 0 || si >= len(selected) {
+		return
+	}
+	m, ok := selected[si].(map[string]any)
+	if !ok {
+		return
+	}
+	if val, ok := m["value"].(string); ok {
+		delete(cb.selectedVals, val)
+	}
+	cb.obj.This.DeleteAt("selected_items", si)
+	cb.applyFilter(cb.inputVal())
+	cb.obj.Trigger("change", cb.obj.This.Get("selected_items"))
+}
+
+// onFocus reloads options and opens the dropdown.
+func (cb *cbCtx) onFocus(_ js.Value, _ []js.Value) any {
+	cb.loadOptions()
+	cb.applyFilter(cb.inputVal())
+	cb.showDrop()
+	return nil
+}
+
+// onInput filters the dropdown as the user types.
+func (cb *cbCtx) onInput(_ js.Value, _ []js.Value) any {
+	cb.applyFilter(cb.inp.Get("value").String())
+	cb.showDrop()
+	return nil
+}
+
+// onKeydown handles Enter (select or notinlist) and Escape (clear and close).
+func (cb *cbCtx) onKeydown(_ js.Value, args []js.Value) any {
+	key := args[0].Get("key").String()
+	switch key {
+	case "Enter":
+		val := strings.TrimSpace(cb.inp.Get("value").String())
+		if val == "" {
+			return nil
+		}
+		valLower := strings.ToLower(val)
+		var filtered []any
+		if v, ok := cb.obj.This.Get("filtered_options").([]any); ok {
+			filtered = v
+		}
+		for _, opt := range filtered {
+			m, ok := opt.(map[string]any)
+			if !ok {
+				continue
+			}
+			label, ok := m["label"].(string)
+			if !ok {
+				continue
+			}
+			if strings.ToLower(label) == valLower {
+				cb.selectItem(m)
+				return nil
+			}
+		}
+		// No exact match — clear input, close dropdown, notify parent.
+		cb.obj.This.Set("input_val", "")
+		cb.hideDrop()
+		cb.obj.Trigger("notinlist", val)
+
+	case "Escape":
+		cb.obj.This.Set("input_val", "")
+		cb.hideDrop()
+		cb.applyFilter("")
+	}
+	return nil
+}
+
+// onRootClick is a delegated click handler covering both option selection
+// (.cb-opt) and tag removal (.cb-rm).
+func (cb *cbCtx) onRootClick(_ js.Value, args []js.Value) any {
+	event := args[0]
+	// Prevent clicks inside the combobox from reaching the document handler
+	// that would close the dropdown.
+	event.Call("stopPropagation")
+	el := event.Get("target")
+	for !el.IsNull() && !el.IsUndefined() {
+		cls := el.Get("className").String()
+
+		if strings.Contains(cls, "cb-opt") {
+			fi, err := strconv.Atoi(el.Get("dataset").Get("fi").String())
+			if err != nil {
+				return nil
+			}
+			var filtered []any
+			if v, ok := cb.obj.This.Get("filtered_options").([]any); ok {
+				filtered = v
+			}
+			if fi >= 0 && fi < len(filtered) {
+				if m, ok := filtered[fi].(map[string]any); ok {
+					cb.selectItem(m)
+				}
+			}
+			return nil
+		}
+
+		if strings.Contains(cls, "cb-rm") {
+			si, err := strconv.Atoi(el.Get("dataset").Get("si").String())
+			if err != nil {
+				return nil
+			}
+			cb.removeItem(si)
+			return nil
+		}
+
+		el = el.Get("parentElement")
+	}
+	return nil
+}
+
+// onDocClick closes the dropdown when clicking outside the component.
+func (cb *cbCtx) onDocClick(_ js.Value, _ []js.Value) any {
+	cb.hideDrop()
+	return nil
+}
+
 func (c *Combobox) Render(obj *wprana.PranaObj) {
 	// Query stable elements — none of them are guarded by a ? conditional,
 	// so they are always present in the shadow DOM at Render time.
-	var inps []js.Value = dom.Query(obj.Dom, ".cb-input")
-	var roots []js.Value = dom.Query(obj.Dom, ".cb-root")
-	var dropWraps []js.Value = dom.Query(obj.Dom, ".cb-drop-wrap")
+	inps := dom.Query(obj.Dom, ".cb-input")
+	roots := dom.Query(obj.Dom, ".cb-root")
+	dropWraps := dom.Query(obj.Dom, ".cb-drop-wrap")
 	if len(inps) == 0 || len(roots) == 0 || len(dropWraps) == 0 {
 		return
 	}
-	var inp js.Value = inps[0]
-	var dropWrap js.Value = dropWraps[0]
 
-	// selectedVals provides O(1) duplicate checks without touching the DOM.
-	var selectedVals map[string]bool = map[string]bool{}
-
-	// lastRaw avoids re-parsing the options JSON when nothing changed.
-	var lastRaw string
-
-	// showDrop / hideDrop manipulate the dropdown visibility directly via the
-	// style attribute, bypassing wprana's reactive sync for this purely
-	// presentational state.
-	showDrop := func() {
-		dropWrap.Get("style").Set("display", "block")
-	}
-	hideDrop := func() {
-		dropWrap.Get("style").Set("display", "none")
-	}
-
-	// applyFilter rebuilds filtered_options from all_options, excluding
-	// already-selected values and applying a case-insensitive substring filter.
-	applyFilter := func(query string) {
-		query = strings.ToLower(strings.TrimSpace(query))
-		var allOpts []any
-		if v, ok := obj.This.Get("all_options").([]any); ok {
-			allOpts = v
-		}
-		var filtered []any = make([]any, 0, len(allOpts))
-		for _, opt := range allOpts {
-			var m map[string]any
-			var ok bool
-			if m, ok = opt.(map[string]any); !ok {
-				continue
-			}
-			var val string
-			if val, ok = m["value"].(string); !ok {
-				continue
-			}
-			if selectedVals[val] {
-				continue
-			}
-			if query == "" {
-				filtered = append(filtered, m)
-				continue
-			}
-			var label string
-			if label, ok = m["label"].(string); !ok {
-				continue
-			}
-			if strings.Contains(strings.ToLower(label), query) {
-				filtered = append(filtered, m)
-			}
-		}
-		obj.This.Set("filtered_options", filtered)
-	}
-
-	// loadOptions parses the options attribute (JSON) into all_options.
-	// It is a no-op when the raw string has not changed since the last call,
-	// so it is safe to call on every interaction without performance penalty.
-	loadOptions := func() {
-		var raw string
-		if v, ok := obj.This.Get("options").(string); ok {
-			raw = v
-		}
-		if raw == lastRaw {
-			return
-		}
-		lastRaw = raw
-		obj.This.Set("all_options", parseOptions(raw))
-		var inputVal string
-		if v, ok := obj.This.Get("input_val").(string); ok {
-			inputVal = v
-		}
-		applyFilter(inputVal)
-	}
-
-	// selectItem adds an option to the selection, clears the input, and
-	// fires the @change event.
-	selectItem := func(m map[string]any) {
-		var val string
-		var ok bool
-		if val, ok = m["value"].(string); !ok {
-			return
-		}
-		if selectedVals[val] {
-			return
-		}
-		selectedVals[val] = true
-		obj.This.Append("selected_items", m)
-		obj.This.Set("input_val", "")
-		hideDrop()
-		applyFilter("")
-		obj.Trigger("change", obj.This.Get("selected_items"))
-	}
-
-	// removeItem removes the selected item at index si and fires @change.
-	removeItem := func(si int) {
-		var selected []any
-		var ok bool
-		if selected, ok = obj.This.Get("selected_items").([]any); !ok {
-			return
-		}
-		if si < 0 || si >= len(selected) {
-			return
-		}
-		var m map[string]any
-		if m, ok = selected[si].(map[string]any); !ok {
-			return
-		}
-		var val string
-		if val, ok = m["value"].(string); ok {
-			delete(selectedVals, val)
-		}
-		obj.This.DeleteAt("selected_items", si)
-		var inputVal string
-		if v, ok := obj.This.Get("input_val").(string); ok {
-			inputVal = v
-		}
-		applyFilter(inputVal)
-		obj.Trigger("change", obj.This.Get("selected_items"))
+	cb := &cbCtx{
+		obj:          obj,
+		inp:          inps[0],
+		dropWrap:     dropWraps[0],
+		selectedVals: map[string]bool{},
 	}
 
 	// Parse options that may already be present via the attribute.
-	loadOptions()
+	cb.loadOptions()
 
-	// -------------------------------------------------------------------------
-	// Input: focus → reload options (in case parent changed the attribute) and
-	// open dropdown.
-	// -------------------------------------------------------------------------
-	dom.AddEvent(inp, "focus", func(_ js.Value, _ []js.Value) any {
-		loadOptions()
-		var inputVal string
-		if v, ok := obj.This.Get("input_val").(string); ok {
-			inputVal = v
-		}
-		applyFilter(inputVal)
-		showDrop()
-		return nil
-	}, false, false)
+	// Register event handlers.
+	dom.AddEvent(cb.inp, "focus", cb.onFocus, false, false)
+	dom.AddEvent(cb.inp, "input", cb.onInput, false, false)
+	dom.AddEvent(cb.inp, "keydown", cb.onKeydown, false, false)
+	dom.AddEvent(roots[0], "click", cb.onRootClick, false, false)
 
-	// -------------------------------------------------------------------------
-	// Input: typing → filter + open dropdown.
-	// The &value two-way binding in the template keeps input_val in sync;
-	// we only need to read the raw DOM value here for filtering.
-	// -------------------------------------------------------------------------
-	dom.AddEvent(inp, "input", func(_ js.Value, _ []js.Value) any {
-		var val string = inp.Get("value").String()
-		applyFilter(val)
-		showDrop()
-		return nil
-	}, false, false)
-
-	// -------------------------------------------------------------------------
-	// Input: keyboard shortcuts.
-	//   Enter — select exact match, or fire @notinlist if absent.
-	//   Escape — clear and close.
-	// -------------------------------------------------------------------------
-	dom.AddEvent(inp, "keydown", func(_ js.Value, args []js.Value) any {
-		var event js.Value = args[0]
-		var key string = event.Get("key").String()
-		switch key {
-		case "Enter":
-			var val string = strings.TrimSpace(inp.Get("value").String())
-			if val == "" {
-				return nil
-			}
-			var valLower string = strings.ToLower(val)
-			var filtered []any
-			if v, ok := obj.This.Get("filtered_options").([]any); ok {
-				filtered = v
-			}
-			for _, opt := range filtered {
-				var m map[string]any
-				var ok bool
-				if m, ok = opt.(map[string]any); !ok {
-					continue
-				}
-				var label string
-				if label, ok = m["label"].(string); !ok {
-					continue
-				}
-				if strings.ToLower(label) == valLower {
-					selectItem(m)
-					return nil
-				}
-			}
-			// No exact match — clear input, close dropdown, notify parent.
-			obj.This.Set("input_val", "")
-			hideDrop()
-			obj.Trigger("notinlist", val)
-
-		case "Escape":
-			obj.This.Set("input_val", "")
-			hideDrop()
-			applyFilter("")
-		}
-		return nil
-	}, false, false)
-
-	// -------------------------------------------------------------------------
-	// Root: delegated click handler covering both option selection (.cb-opt)
-	// and tag removal (.cb-rm).  Traverses from event.target upward until a
-	// recognised class is found or the root is reached.
-	// stopPropagation prevents the click from reaching the document handler
-	// that would close the dropdown.
-	// -------------------------------------------------------------------------
-	dom.AddEvent(roots[0], "click", func(_ js.Value, args []js.Value) any {
-		var event js.Value = args[0]
-		// Prevent clicks inside the combobox from reaching the document handler
-		// that would close the dropdown.
-		event.Call("stopPropagation")
-		var el js.Value = event.Get("target")
-		for !el.IsNull() && !el.IsUndefined() {
-			var cls string = el.Get("className").String()
-
-			if strings.Contains(cls, "cb-opt") {
-				var fiStr string = el.Get("dataset").Get("fi").String()
-				var fi int
-				var err error
-				if fi, err = strconv.Atoi(fiStr); err != nil {
-					return nil
-				}
-				var filtered []any
-				if v, ok := obj.This.Get("filtered_options").([]any); ok {
-					filtered = v
-				}
-				if fi >= 0 && fi < len(filtered) {
-					if m, ok := filtered[fi].(map[string]any); ok {
-						selectItem(m)
-					}
-				}
-				return nil
-			}
-
-			if strings.Contains(cls, "cb-rm") {
-				var siStr string = el.Get("dataset").Get("si").String()
-				var si int
-				var err error
-				if si, err = strconv.Atoi(siStr); err != nil {
-					return nil
-				}
-				removeItem(si)
-				return nil
-			}
-
-			el = el.Get("parentElement")
-		}
-		return nil
-	}, false, false)
-
-	// -------------------------------------------------------------------------
 	// Document: close dropdown when clicking outside the component.
-	//
-	// Clicks inside the component are stopped by the root handler above,
-	// so only outside clicks reach this handler.
-	//
-	// Note: this handler persists on the document even if the component is later
+	// This handler persists on the document even if the component is later
 	// removed from the DOM.  In that scenario it becomes a harmless no-op because
-	// wprana stops syncing disconnected components.  If explicit cleanup is
-	// required, store the returned handler ID and call dom.RmEvent when done.
-	// -------------------------------------------------------------------------
-	var doc js.Value = js.Global().Get("document")
-	dom.AddEvent(doc, "click", func(_ js.Value, args []js.Value) any {
-		hideDrop()
-		return nil
-	}, false, false)
+	// wprana stops syncing disconnected components.
+	doc := js.Global().Get("document")
+	dom.AddEvent(doc, "click", cb.onDocClick, false, false)
 }
