@@ -1,0 +1,12 @@
+.widget {
+   border: 1px solid #ccc;
+   border-radius: 8px;
+   padding: 16px;
+   max-width: 400px;
+   font-family: sans-serif;
+}
+h2 { margin-top: 0; }
+input[type="text"] {
+   padding: 4px 8px;
+   margin-right: 8px;
+}

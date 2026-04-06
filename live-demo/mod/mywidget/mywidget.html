@@ -1,0 +1,26 @@
+<div class="widget">
+   <h2>{{title}}</h2>
+   <p>Counter: <span>{{count}}</span></p>
+
+   <ul>
+      <li *items:i>{{items[i].label}}</li>
+   </ul>
+
+   <!-- Boolean conditional -->
+   <div ?show_extra>
+      <p>Extra: {{extra}}</p>
+   </div>
+
+   <!-- Equality conditional: only when mode is "edit" -->
+   <div ?mode="edit">
+      <p>You are in edit mode</p>
+   </div>
+
+   <!-- Inequality conditional: hidden when mode is "readonly" -->
+   <div ?mode!="readonly">
+      <form>
+         <input &value="{{input_val}}" type="text" placeholder="Add item..." />
+         <input type="submit" value="Add" />
+      </form>
+   </div>
+</div>

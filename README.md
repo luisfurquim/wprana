@@ -4,6 +4,9 @@
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 [![Go Report Card](https://www.goreportcard.com/badge/github.com/luisfurquim/wprana?ts=1712345678)](https://www.goreportcard.com/report/github.com/luisfurquim/wprana?ts=1712345678)
 
+> **[Live Demo](https://luisfurquim.github.io/wprana/)** — try it in your browser, no install needed.
+> Or run locally: clone the repo, `cd live-demo && bash build.sh && go run serve.go`
+
 **Build reactive Web Components in pure Go — no JavaScript framework required.**
 
 wprana compiles to WebAssembly and gives you custom HTML elements with
@@ -86,6 +89,8 @@ go get github.com/luisfurquim/wprana
 WPRANA=$(go list -m -f '{{.Dir}}' github.com/luisfurquim/wprana)
 mkdir -p static
 cp "$WPRANA/prana_helper.js" static/
+# Go 1.24+: lib/wasm/   Go ≤1.23: misc/wasm/
+cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" static/ 2>/dev/null || \
 cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" static/
 ```
 

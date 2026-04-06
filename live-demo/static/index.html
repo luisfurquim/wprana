@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <meta charset="utf-8" />
+   <title>wprana live demo</title>
+   <script src="prana_helper.js"></script>
+   <script src="wasm_exec.js"></script>
+   <script>
+      const go = new Go();
+      WebAssembly
+         .instantiateStreaming(fetch("main.wasm"), go.importObject)
+         .then(r => go.run(r.instance))
+         .catch(console.error);
+   </script>
+</head>
+<body>
+   <my-widget title="wprana live demo"></my-widget>
+</body>
+</html>
