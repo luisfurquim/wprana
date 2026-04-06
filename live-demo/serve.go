@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	fs := http.FileServer(http.Dir("static"))
+	fs := http.FileServer(http.Dir("../docs"))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, ".wasm") {
 			w.Header().Set("Content-Type", "application/wasm")
