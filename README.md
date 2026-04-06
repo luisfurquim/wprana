@@ -1390,6 +1390,18 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
         map[string]any{"label": "Gamma"},
     })
 
+    // Keep input_val in sync on every keystroke so that a reactive sync
+    // triggered by other data changes (e.g. the counter ticker) does not
+    // overwrite the input with a stale value.
+    inputs := dom.Query(obj.Dom, "input[type=\"text\"]")
+    if len(inputs) > 0 {
+        dom.AddEvent(inputs[0], "input",
+            func(this js.Value, args []js.Value) any {
+                obj.This.Set("input_val", inputs[0].Get("value").String())
+                return nil
+            }, false, false)
+    }
+
     // Set up form handler
     forms := dom.Query(obj.Dom, "form")
     if len(forms) > 0 {
