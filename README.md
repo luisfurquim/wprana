@@ -1546,8 +1546,8 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
       </div>
 
       <!-- Contains conditional -->
-      <div ?mode*="di" class="cond-demo">
-         <p>Contains match: mode contains "di"</p>
+      <div ?mode*="d" class="cond-demo">
+         <p>Contains match: mode contains "d"</p>
       </div>
 
       <ul>
