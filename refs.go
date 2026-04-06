@@ -147,6 +147,21 @@ func refExtractCond(model js.Value, name, value string) (cond, condOp, condVal s
 		cond = condName[:len(condName)-1]
 		condOp = "neq"
 		condVal = value
+	case strings.HasSuffix(condName, "^") && value != "":
+		// ?cond^="val" -> starts with
+		cond = condName[:len(condName)-1]
+		condOp = "prefix"
+		condVal = value
+	case strings.HasSuffix(condName, "$") && value != "":
+		// ?cond$="val" -> ends with
+		cond = condName[:len(condName)-1]
+		condOp = "suffix"
+		condVal = value
+	case strings.HasSuffix(condName, "*") && value != "":
+		// ?cond*="val" -> contains
+		cond = condName[:len(condName)-1]
+		condOp = "contains"
+		condVal = value
 	case value != "":
 		// ?cond="val" -> the browser delivers name="?cond" value="val"
 		cond = condName

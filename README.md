@@ -385,7 +385,7 @@ This fires the browser's `hashchange` event, which in turn updates every
 ### Conditional Rendering
 
 Use the `?` prefix on an attribute to conditionally show or hide an element.
-Four forms are supported:
+Seven forms are supported:
 
 #### Boolean (truthiness)
 
@@ -450,6 +450,42 @@ equal the given value:
 </div>
 ```
 
+#### Prefix (`?var^="value"`)
+
+Shows the element only when the variable's string representation **starts with**
+the given value:
+
+```html
+<!-- Shows only when url starts with "https" -->
+<div ?url^="https">
+    <p>Secure connection</p>
+</div>
+```
+
+#### Suffix (`?var$="value"`)
+
+Shows the element only when the variable's string representation **ends with**
+the given value:
+
+```html
+<!-- Shows only when filename ends with ".pdf" -->
+<div ?filename$=".pdf">
+    <p>PDF document</p>
+</div>
+```
+
+#### Contains (`?var*="value"`)
+
+Shows the element only when the variable's string representation **contains**
+the given value as a substring:
+
+```html
+<!-- Shows only when tags contain "urgent" -->
+<div ?tags*="urgent">
+    <p class="alert">Urgent item</p>
+</div>
+```
+
 #### How operators map to HTML attributes
 
 The browser parses these forms naturally — no special escaping is needed:
@@ -460,6 +496,9 @@ The browser parses these forms naturally — no special escaping is needed:
 | `?!cond` | `?!cond` | *(empty)* | negated truthy |
 | `?cond="abc"` | `?cond` | `abc` | equality |
 | `?cond!="abc"` | `?cond!` | `abc` | inequality |
+| `?cond^="abc"` | `?cond^` | `abc` | starts with |
+| `?cond$="abc"` | `?cond$` | `abc` | ends with |
+| `?cond*="abc"` | `?cond*` | `abc` | contains |
 
 > **Note:** Comparison operators `<` and `>` are not supported because they
 > conflict with HTML tag syntax.
@@ -1215,6 +1254,9 @@ data map -> calls the function.
 | `?!` | Negated | `?!is_loading` | Show element only when value is **falsy**. |
 | `?="val"` | Equality | `?status="active"` | Show element only when value equals `"val"`. |
 | `?!="val"` | Inequality | `?status!="deleted"` | Show element only when value does **not** equal `"val"`. |
+| `?^="val"` | Prefix | `?url^="https"` | Show element only when value **starts with** `"val"`. |
+| `?$="val"` | Suffix | `?name$=".pdf"` | Show element only when value **ends with** `"val"`. |
+| `?*="val"` | Contains | `?tags*="urgent"` | Show element only when value **contains** `"val"`. |
 | `*` | Iteration | `*items:i` | Repeat element for each array item (wrapped in `<span>`). |
 | `**` | Iteration (no wrap) | `**items:i` | Repeat first child for each item (container stays). |
 | `&` | Two-way | `&value="{{val}}"` | Sync `<input>` / `<select>` / `<textarea>` with data. |

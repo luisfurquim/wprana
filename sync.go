@@ -4,6 +4,7 @@ package wprana
 
 import (
 	"fmt"
+	"strings"
 	"syscall/js"
 )
 
@@ -122,6 +123,12 @@ func condSync(dom js.Value, ref *DOMRefNode, ctx Ctx, index any, state *PranaSta
 		cond = fmt.Sprintf("%v", res) == ref.CondVal
 	case "neq":
 		cond = fmt.Sprintf("%v", res) != ref.CondVal
+	case "prefix":
+		cond = strings.HasPrefix(fmt.Sprintf("%v", res), ref.CondVal)
+	case "suffix":
+		cond = strings.HasSuffix(fmt.Sprintf("%v", res), ref.CondVal)
+	case "contains":
+		cond = strings.Contains(fmt.Sprintf("%v", res), ref.CondVal)
 	case "!":
 		cond = !isTruthy(res)
 	default:
