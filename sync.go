@@ -219,48 +219,28 @@ func syncText(dom js.Value, ref *DOMRefNode, ctx Ctx) {
 	}
 }
 
-// syncArray synchronizes an array iteration node with its backing data.
-func syncArray(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown bool, change *Change) {
-	st := getState(dom)
-	if st == nil {
-		G.Logf(1, "syncArray: node without state: %q\n", ref.ArrayVar)
-		return
-	}
-
-	// Resolve the array in the context
-	var arr []any
+// resolveArray looks up the array variable in the context and returns
+// the resolved slice, or nil if not found.
+func resolveArray(st *NodeState, ref *DOMRefNode, ctx Ctx) []any {
 	for j := range ctx {
 		v := solve(st.Tree, ctx[j], ctx)
 		if v != nil {
 			if a, ok := v.([]any); ok {
-				arr = arr[:0]
-				arr = a
-				break
+				return a
 			}
 			G.Logf(3, "syncArray: arrayVar %q is not []any: %T\n", ref.ArrayVar, v)
-			return
+			return nil
 		}
 	}
-	if arr == nil {
-		G.Logf(2, "syncArray: unresolved symbol for iteration: %q\n", ref.ArrayVar)
-		return
-	}
+	G.Logf(2, "syncArray: unresolved symbol for iteration: %q\n", ref.ArrayVar)
+	return nil
+}
 
-	// Determine deletion index (optimized change)
-	kdel := -1
-	if change != nil && change.Delete != nil {
-		if &change.Delete.Target[0] == &arr[0] {
-			kdel = change.Delete.Index
-		}
-	}
-
-	// For **, the template ref is in ModelRef; for *, ref already contains the bindings
-	syncRef := ref
-	if ref.NoSpan && ref.ModelRef != nil {
-		syncRef = ref.ModelRef
-	}
-
-	// Sync existing children with array items
+// syncExistingChildren walks the existing DOM children and syncs each one
+// with the corresponding array item. Handles optimized deletion when kdel >= 0.
+// Returns the updated arr (may shrink on delete) and the index of the first
+// array item that has no corresponding DOM child yet.
+func syncExistingChildren(dom js.Value, arr []any, kdel int, st *NodeState, syncRef *DOMRefNode, ctx Ctx, state *PranaState, syncDown bool) ([]any, int) {
 	childNodes := dom.Get("childNodes")
 	i := 0
 	for i < len(arr) {
@@ -276,8 +256,7 @@ func syncArray(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDo
 			continue
 		}
 		ndx := map[string]any{st.AIndex: i}
-		itemCtx := []any{arr[i]}
-		itemCtxFull := buildCtx(ndx, itemCtx, ctx)
+		itemCtxFull := buildCtx(ndx, []any{arr[i]}, ctx)
 
 		if syncRef.Cond != "" {
 			condSync(child, syncRef, itemCtxFull, i, state, syncDown)
@@ -286,12 +265,15 @@ func syncArray(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDo
 		}
 		i++
 	}
+	return arr, i
+}
 
-	// Add new children for items beyond the existing ones
-	for ; i < len(arr); i++ {
+// appendNewChildren creates and appends DOM nodes for array items beyond
+// the existing children. Returns the index after the last appended item.
+func appendNewChildren(dom js.Value, arr []any, start int, st *NodeState, syncRef *DOMRefNode, ctx Ctx, state *PranaState, syncDown bool) int {
+	for i := start; i < len(arr); i++ {
 		ndx := map[string]any{st.AIndex: i}
-		itemCtx := []any{arr[i]}
-		itemCtxFull := buildCtx(ndx, itemCtx, ctx)
+		itemCtxFull := buildCtx(ndx, []any{arr[i]}, ctx)
 
 		// Sync the model before cloning
 		model := st.Model
@@ -302,7 +284,6 @@ func syncArray(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDo
 		}
 
 		cloned := cloneNode(model)
-		// Transfer state metadata to the clone
 		clonedSt := getState(cloned)
 		if clonedSt == nil {
 			_, clonedSt = getOrCreateState(cloned)
@@ -320,16 +301,50 @@ func syncArray(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDo
 
 		dom.Call("appendChild", cloned)
 	}
+	return len(arr)
+}
 
-	// Remove excess children
+// removeExcessChildren removes DOM children from index start onward.
+func removeExcessChildren(dom js.Value, start int) {
 	for {
-		childNodes = dom.Get("childNodes")
-		nChildren := childNodes.Get("length").Int()
-		if i >= nChildren {
+		childNodes := dom.Get("childNodes")
+		if start >= childNodes.Get("length").Int() {
 			break
 		}
-		dom.Call("removeChild", childNodes.Index(i))
+		dom.Call("removeChild", childNodes.Index(start))
 	}
+}
+
+// syncArray synchronizes an array iteration node with its backing data.
+func syncArray(dom js.Value, ref *DOMRefNode, ctx Ctx, state *PranaState, syncDown bool, change *Change) {
+	st := getState(dom)
+	if st == nil {
+		G.Logf(1, "syncArray: node without state: %q\n", ref.ArrayVar)
+		return
+	}
+
+	arr := resolveArray(st, ref, ctx)
+	if arr == nil {
+		return
+	}
+
+	// Determine deletion index (optimized change)
+	kdel := -1
+	if change != nil && change.Delete != nil {
+		if &change.Delete.Target[0] == &arr[0] {
+			kdel = change.Delete.Index
+		}
+	}
+
+	// For **, the template ref is in ModelRef; for *, ref already contains the bindings
+	syncRef := ref
+	if ref.NoSpan && ref.ModelRef != nil {
+		syncRef = ref.ModelRef
+	}
+
+	arr, i := syncExistingChildren(dom, arr, kdel, st, syncRef, ctx, state, syncDown)
+	i = appendNewChildren(dom, arr, i, st, syncRef, ctx, state, syncDown)
+	removeExcessChildren(dom, i)
 }
 
 // doSync synchronizes dom with the bindings of ref in context ctx.
