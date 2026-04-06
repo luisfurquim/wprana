@@ -1,12 +1,189 @@
 .widget {
-   border: 1px solid #ccc;
-   border-radius: 8px;
-   padding: 16px;
-   max-width: 400px;
-   font-family: sans-serif;
+   max-width: 600px;
+   margin: 24px auto;
+   padding: 24px;
+   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+   color: #1a1a2e;
+   background: #fff;
+   border-radius: 12px;
+   box-shadow: 0 2px 12px rgba(0,0,0,0.08);
 }
-h2 { margin-top: 0; }
+
+h1 {
+   margin: 0 0 12px;
+   font-size: 1.4em;
+   color: #16213e;
+}
+
+/* Navigation */
+nav {
+   display: flex;
+   gap: 8px;
+   margin-bottom: 16px;
+   border-bottom: 2px solid #e8e8e8;
+   padding-bottom: 12px;
+}
+nav a {
+   padding: 6px 16px;
+   border-radius: 6px;
+   text-decoration: none;
+   color: #0f3460;
+   font-weight: 600;
+   background: #e8f0fe;
+   transition: background 0.2s;
+   cursor: pointer;
+}
+nav a:hover {
+   background: #c5d9f7;
+}
+
+/* Toolbar */
+.toolbar {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   margin-bottom: 16px;
+   flex-wrap: wrap;
+}
+.toolbar button {
+   padding: 6px 14px;
+   border: 1px solid #ccc;
+   border-radius: 6px;
+   background: #f4f4f9;
+   cursor: pointer;
+   font-size: 0.9em;
+   transition: background 0.2s;
+}
+.toolbar button:hover {
+   background: #dde;
+}
+.mode-badge {
+   font-size: 0.85em;
+   color: #555;
+}
+
+/* Pages */
+.page { margin-top: 8px; }
+
+h2 {
+   margin: 0 0 12px;
+   font-size: 1.15em;
+   color: #0f3460;
+}
+
+/* Counters */
+.counter {
+   display: inline-block;
+   background: #0f3460;
+   color: #fff;
+   padding: 2px 10px;
+   border-radius: 4px;
+   font-weight: 700;
+   min-width: 28px;
+   text-align: center;
+}
+.counter-lg {
+   font-size: 2em;
+   padding: 8px 20px;
+   border-radius: 8px;
+}
+
+/* Extra box */
+.extra-box {
+   background: #e8f5e9;
+   border-left: 4px solid #4caf50;
+   padding: 8px 12px;
+   border-radius: 4px;
+   margin: 10px 0;
+}
+.extra-hint {
+   background: #fff3e0;
+   border-left: 4px solid #ff9800;
+   padding: 8px 12px;
+   border-radius: 4px;
+   margin: 10px 0;
+   font-style: italic;
+   color: #6d4c00;
+}
+.extra-hint p, .extra-box p { margin: 0; }
+
+/* Conditional demo labels */
+.cond-demo {
+   background: #ede7f6;
+   border-left: 4px solid #7e57c2;
+   padding: 6px 12px;
+   border-radius: 4px;
+   margin: 6px 0;
+   font-size: 0.9em;
+}
+.cond-demo p { margin: 0; }
+
+/* Edit hint */
+.edit-hint {
+   font-size: 0.85em;
+   color: #777;
+}
+.edit-hint p { margin: 4px 0; }
+
+/* Form */
+form {
+   display: flex;
+   gap: 8px;
+   margin: 12px 0;
+}
 input[type="text"] {
-   padding: 4px 8px;
-   margin-right: 8px;
+   flex: 1;
+   padding: 6px 10px;
+   border: 1px solid #ccc;
+   border-radius: 6px;
+   font-size: 0.95em;
+}
+input[type="submit"] {
+   padding: 6px 16px;
+   background: #0f3460;
+   color: #fff;
+   border: none;
+   border-radius: 6px;
+   cursor: pointer;
+   font-weight: 600;
+}
+input[type="submit"]:hover {
+   background: #1a4a8a;
+}
+
+/* List */
+ul {
+   list-style: none;
+   padding: 0;
+   margin: 8px 0;
+}
+li {
+   padding: 6px 10px;
+   background: #f9f9fb;
+   border-radius: 4px;
+   margin-bottom: 4px;
+   border: 1px solid #eee;
+}
+
+/* Dashboard grid */
+.dash-grid {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 12px;
+   margin: 16px 0;
+}
+.dash-card {
+   background: #f4f4f9;
+   border-radius: 8px;
+   padding: 12px;
+   border: 1px solid #e0e0e0;
+}
+.dash-card h3 {
+   margin: 0 0 8px;
+   font-size: 1em;
+   color: #16213e;
+}
+.dash-card p {
+   margin: 4px 0;
+   font-size: 0.9em;
 }

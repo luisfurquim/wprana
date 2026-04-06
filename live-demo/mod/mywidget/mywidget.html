@@ -1,26 +1,90 @@
 <div class="widget">
-   <h2>{{title}}</h2>
-   <p>Counter: <span>{{count}}</span></p>
+   <h1>{{title}}</h1>
 
-   <ul>
-      <li *items:i>{{items[i].label}}</li>
-   </ul>
+   <!-- Navigation -->
+   <nav>
+      <a id="nav-list" href="#list">List</a>
+      <a id="nav-dash" href="#dashboard">Dashboard</a>
+   </nav>
 
-   <!-- Boolean conditional -->
-   <div ?show_extra>
-      <p>Extra: {{extra}}</p>
+   <!-- Toolbar -->
+   <div class="toolbar">
+      <button id="btn-toggle-mode">Toggle Mode</button>
+      <button id="btn-toggle-extra">Toggle Extra</button>
+      <span class="mode-badge">Mode: <strong>{{mode}}</strong></span>
    </div>
 
-   <!-- Equality conditional: only when mode is "edit" -->
-   <div ?mode="edit">
-      <p>You are in edit mode</p>
+   <!-- Page 1: List -->
+   <div ?#="list" class="page page-list">
+      <h2>Item List</h2>
+      <p>Auto-counter (every 2s): <span class="counter">{{count}}</span></p>
+
+      <!-- Boolean conditional -->
+      <div ?show_extra class="extra-box">
+         <p>{{extra}}</p>
+      </div>
+
+      <!-- Negated boolean conditional -->
+      <div ?!show_extra class="extra-hint">
+         <p>Click "Toggle Extra" to reveal extra content.</p>
+      </div>
+
+      <!-- Equality conditional: only in edit mode -->
+      <div ?mode="edit">
+         <form>
+            <input &value="{{input_val}}" type="text" placeholder="Add item..." />
+            <input type="submit" value="Add" />
+         </form>
+      </div>
+
+      <!-- Inequality conditional: hidden when readonly -->
+      <div ?mode!="readonly" class="edit-hint">
+         <p>Form is visible because mode != "readonly".</p>
+      </div>
+
+      <!-- Prefix conditional -->
+      <div ?mode^="ed" class="cond-demo">
+         <p>Prefix match: mode starts with "ed"</p>
+      </div>
+
+      <!-- Suffix conditional -->
+      <div ?mode$="it" class="cond-demo">
+         <p>Suffix match: mode ends with "it"</p>
+      </div>
+
+      <!-- Contains conditional -->
+      <div ?mode*="di" class="cond-demo">
+         <p>Contains match: mode contains "di"</p>
+      </div>
+
+      <ul>
+         <li *items:i>{{items[i].label}}</li>
+      </ul>
    </div>
 
-   <!-- Inequality conditional: hidden when mode is "readonly" -->
-   <div ?mode!="readonly">
-      <form>
-         <input &value="{{input_val}}" type="text" placeholder="Add item..." />
-         <input type="submit" value="Add" />
-      </form>
+   <!-- Page 2: Dashboard -->
+   <div ?#="dashboard" class="page page-dash">
+      <h2>Dashboard</h2>
+      <p>Slow counter (every 5s): <span class="counter counter-lg">{{count2}}</span></p>
+
+      <div class="dash-grid">
+         <div class="dash-card">
+            <h3>Items</h3>
+            <ul>
+               <li *items:i>{{items[i].label}}</li>
+            </ul>
+         </div>
+         <div class="dash-card">
+            <h3>Status</h3>
+            <p>Mode: <strong>{{mode}}</strong></p>
+            <p>Extra visible: <strong>{{show_extra}}</strong></p>
+            <p>Fast counter: <strong>{{count}}</strong></p>
+         </div>
+      </div>
+
+      <!-- Boolean conditional on dashboard too -->
+      <div ?show_extra class="extra-box">
+         <p>{{extra}}</p>
+      </div>
    </div>
 </div>

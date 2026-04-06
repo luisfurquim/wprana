@@ -1347,6 +1347,7 @@ package mywidget
 import (
     _ "embed"
     "syscall/js"
+
     "github.com/luisfurquim/wprana"
     "github.com/luisfurquim/wprana/dom"
     "github.com/luisfurquim/wprana/timer"
@@ -1372,17 +1373,23 @@ func init() {
 
 func (w *MyWidget) InitData() map[string]any {
     return map[string]any{
-        "title":      "My Widget",
+        "title":      "wprana live demo",
         "count":      0,
+        "count2":     0,
         "items":      []any{},
         "show_extra": false,
-        "extra":      "",
+        "extra":      "This is extra content toggled by a boolean conditional.",
         "input_val":  "",
         "mode":       "edit",
     }
 }
 
 func (w *MyWidget) Render(obj *wprana.PranaObj) {
+    // Default to #list page if no hash fragment
+    if js.Global().Get("location").Get("hash").String() == "" {
+        wprana.GoTo("list")
+    }
+
     // Populate items
     obj.This.Set("items", []any{
         map[string]any{"label": "Alpha"},
@@ -1390,9 +1397,7 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
         map[string]any{"label": "Gamma"},
     })
 
-    // Keep input_val in sync on every keystroke so that a reactive sync
-    // triggered by other data changes (e.g. the counter ticker) does not
-    // overwrite the input with a stale value.
+    // Keep input_val in sync on every keystroke
     inputs := dom.Query(obj.Dom, "input[type=\"text\"]")
     if len(inputs) > 0 {
         dom.AddEvent(inputs[0], "input",
@@ -1402,19 +1407,65 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
             }, false, false)
     }
 
-    // Set up form handler
+    // Form submit: add item
     forms := dom.Query(obj.Dom, "form")
     if len(forms) > 0 {
         dom.AddEvent(forms[0], "submit",
             func(this js.Value, args []js.Value) any {
                 val := obj.This.Get("input_val").(string)
-                obj.This.Append("items", map[string]any{"label": val})
-                obj.This.Set("input_val", "")
+                if val != "" {
+                    obj.This.Append("items", map[string]any{"label": val})
+                    obj.This.Set("input_val", "")
+                }
                 return nil
             }, true, false)
     }
 
-    // Increment counter every 2 seconds
+    // Toggle mode button
+    toggleBtns := dom.Query(obj.Dom, "#btn-toggle-mode")
+    if len(toggleBtns) > 0 {
+        dom.AddEvent(toggleBtns[0], "click",
+            func(this js.Value, args []js.Value) any {
+                mode := obj.This.Get("mode").(string)
+                if mode == "edit" {
+                    obj.This.Set("mode", "readonly")
+                } else {
+                    obj.This.Set("mode", "edit")
+                }
+                return nil
+            }, false, false)
+    }
+
+    // Toggle extra button
+    extraBtns := dom.Query(obj.Dom, "#btn-toggle-extra")
+    if len(extraBtns) > 0 {
+        dom.AddEvent(extraBtns[0], "click",
+            func(this js.Value, args []js.Value) any {
+                show := obj.This.Get("show_extra").(bool)
+                obj.This.Set("show_extra", !show)
+                return nil
+            }, false, false)
+    }
+
+    // Navigation links
+    navList := dom.Query(obj.Dom, "#nav-list")
+    if len(navList) > 0 {
+        dom.AddEvent(navList[0], "click",
+            func(this js.Value, args []js.Value) any {
+                wprana.GoTo("list")
+                return nil
+            }, true, false)
+    }
+    navDash := dom.Query(obj.Dom, "#nav-dash")
+    if len(navDash) > 0 {
+        dom.AddEvent(navDash[0], "click",
+            func(this js.Value, args []js.Value) any {
+                wprana.GoTo("dashboard")
+                return nil
+            }, true, false)
+    }
+
+    // Page 1 counter: every 2 seconds
     go func() {
         tk := timer.NewTicker(2000)
         defer tk.Stop()
@@ -1424,35 +1475,110 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
             obj.This.Set("count", n)
         }
     }()
+
+    // Page 2 counter: every 5 seconds
+    go func() {
+        tk := timer.NewTicker(5000)
+        defer tk.Stop()
+        n := 0
+        for range tk.Tick {
+            n++
+            obj.This.Set("count2", n)
+        }
+    }()
 }
 ```
 
 ### mod/mywidget/mywidget.html
 ```html
 <div class="widget">
-   <h2>{{title}}</h2>
-   <p>Counter: <span>{{count}}</span></p>
+   <h1>{{title}}</h1>
 
-   <ul>
-      <li *items:i>{{items[i].label}}</li>
-   </ul>
+   <!-- Navigation -->
+   <nav>
+      <a id="nav-list" href="#list">List</a>
+      <a id="nav-dash" href="#dashboard">Dashboard</a>
+   </nav>
 
-   <!-- Boolean conditional -->
-   <div ?show_extra>
-      <p>Extra: {{extra}}</p>
+   <!-- Toolbar -->
+   <div class="toolbar">
+      <button id="btn-toggle-mode">Toggle Mode</button>
+      <button id="btn-toggle-extra">Toggle Extra</button>
+      <span class="mode-badge">Mode: <strong>{{mode}}</strong></span>
    </div>
 
-   <!-- Equality conditional: only when mode is "edit" -->
-   <div ?mode="edit">
-      <p>You are in edit mode</p>
+   <!-- Page 1: List -->
+   <div ?#="list" class="page page-list">
+      <h2>Item List</h2>
+      <p>Auto-counter (every 2s): <span class="counter">{{count}}</span></p>
+
+      <!-- Boolean conditional -->
+      <div ?show_extra class="extra-box">
+         <p>{{extra}}</p>
+      </div>
+
+      <!-- Negated boolean conditional -->
+      <div ?!show_extra class="extra-hint">
+         <p>Click "Toggle Extra" to reveal extra content.</p>
+      </div>
+
+      <!-- Equality conditional: only in edit mode -->
+      <div ?mode="edit">
+         <form>
+            <input &value="{{input_val}}" type="text" placeholder="Add item..." />
+            <input type="submit" value="Add" />
+         </form>
+      </div>
+
+      <!-- Inequality conditional: hidden when readonly -->
+      <div ?mode!="readonly" class="edit-hint">
+         <p>Form is visible because mode != "readonly".</p>
+      </div>
+
+      <!-- Prefix conditional -->
+      <div ?mode^="ed" class="cond-demo">
+         <p>Prefix match: mode starts with "ed"</p>
+      </div>
+
+      <!-- Suffix conditional -->
+      <div ?mode$="it" class="cond-demo">
+         <p>Suffix match: mode ends with "it"</p>
+      </div>
+
+      <!-- Contains conditional -->
+      <div ?mode*="di" class="cond-demo">
+         <p>Contains match: mode contains "di"</p>
+      </div>
+
+      <ul>
+         <li *items:i>{{items[i].label}}</li>
+      </ul>
    </div>
 
-   <!-- Inequality conditional: hidden when mode is "readonly" -->
-   <div ?mode!="readonly">
-      <form>
-         <input &value="{{input_val}}" type="text" placeholder="Add item..." />
-         <input type="submit" value="Add" />
-      </form>
+   <!-- Page 2: Dashboard -->
+   <div ?#="dashboard" class="page page-dash">
+      <h2>Dashboard</h2>
+      <p>Slow counter (every 5s): <span class="counter counter-lg">{{count2}}</span></p>
+
+      <div class="dash-grid">
+         <div class="dash-card">
+            <h3>Items</h3>
+            <ul>
+               <li *items:i>{{items[i].label}}</li>
+            </ul>
+         </div>
+         <div class="dash-card">
+            <h3>Status</h3>
+            <p>Mode: <strong>{{mode}}</strong></p>
+            <p>Extra visible: <strong>{{show_extra}}</strong></p>
+            <p>Fast counter: <strong>{{count}}</strong></p>
+         </div>
+      </div>
+
+      <!-- Boolean conditional on dashboard too -->
+      <div ?show_extra class="extra-box">
+         <p>{{extra}}</p>
+      </div>
    </div>
 </div>
 ```
@@ -1460,17 +1586,37 @@ func (w *MyWidget) Render(obj *wprana.PranaObj) {
 ### mod/mywidget/mywidget.css
 ```css
 .widget {
-   border: 1px solid #ccc;
-   border-radius: 8px;
-   padding: 16px;
-   max-width: 400px;
-   font-family: sans-serif;
+   max-width: 600px;
+   margin: 24px auto;
+   padding: 24px;
+   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+   color: #1a1a2e;
+   background: #fff;
+   border-radius: 12px;
+   box-shadow: 0 2px 12px rgba(0,0,0,0.08);
 }
-h2 { margin-top: 0; }
-input[type="text"] {
-   padding: 4px 8px;
-   margin-right: 8px;
-}
+h1 { margin: 0 0 12px; font-size: 1.4em; color: #16213e; }
+nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid #e8e8e8; padding-bottom: 12px; }
+nav a { padding: 6px 16px; border-radius: 6px; text-decoration: none; color: #0f3460; font-weight: 600; background: #e8f0fe; cursor: pointer; }
+nav a:hover { background: #c5d9f7; }
+.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.toolbar button { padding: 6px 14px; border: 1px solid #ccc; border-radius: 6px; background: #f4f4f9; cursor: pointer; }
+.toolbar button:hover { background: #dde; }
+.mode-badge { font-size: 0.85em; color: #555; }
+h2 { margin: 0 0 12px; font-size: 1.15em; color: #0f3460; }
+.counter { display: inline-block; background: #0f3460; color: #fff; padding: 2px 10px; border-radius: 4px; font-weight: 700; }
+.counter-lg { font-size: 2em; padding: 8px 20px; border-radius: 8px; }
+.extra-box { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 8px 12px; border-radius: 4px; margin: 10px 0; }
+.extra-hint { background: #fff3e0; border-left: 4px solid #ff9800; padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-style: italic; }
+.cond-demo { background: #ede7f6; border-left: 4px solid #7e57c2; padding: 6px 12px; border-radius: 4px; margin: 6px 0; font-size: 0.9em; }
+form { display: flex; gap: 8px; margin: 12px 0; }
+input[type="text"] { flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; }
+input[type="submit"] { padding: 6px 16px; background: #0f3460; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+ul { list-style: none; padding: 0; }
+li { padding: 6px 10px; background: #f9f9fb; border-radius: 4px; margin-bottom: 4px; border: 1px solid #eee; }
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+.dash-card { background: #f4f4f9; border-radius: 8px; padding: 12px; border: 1px solid #e0e0e0; }
+.dash-card h3 { margin: 0 0 8px; font-size: 1em; color: #16213e; }
 ```
 
 ## License
