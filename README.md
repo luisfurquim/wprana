@@ -2,7 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/luisfurquim/wprana.svg)](https://pkg.go.dev/github.com/luisfurquim/wprana)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
-[![Go Report Card](https://goreportcard.com/badge/github.com/luisfurquim/wprana)](https://goreportcard.com/report/github.com/luisfurquim/wprana?ts=1712345678)
+[![Go Report Card](https://www.goreportcard.com/badge/github.com/luisfurquim/wprana?ts=1712345678)](https://www.goreportcard.com/report/github.com/luisfurquim/wprana?ts=1712345678)
 
 **Build reactive Web Components in pure Go — no JavaScript framework required.**
 
